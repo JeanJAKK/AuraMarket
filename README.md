@@ -18,12 +18,12 @@ Plateforme web permettant :
 - Commandes : panier, paiement, historique
 
 ## Installation
-``
-git clone https://github.com/odoo/odoo.git
-cd odoo
-pip install -r requirements.txt
-python odoo-bin -d marketplace_db
-``
+```
+  git clone https://github.com/odoo/odoo.git
+  cd odoo
+  pip install -r requirements.txt
+  python odoo-bin -d marketplace_db
+```
 
 ## Roadmap
 - MVP : produits, vendeurs, commandes
