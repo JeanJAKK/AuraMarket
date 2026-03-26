@@ -1,4 +1,4 @@
-# Marketplace multi-vendeurs avec Odoo
+# Marketplace avec Odoo
 
 ## Objectif
 Plateforme web permettant :
