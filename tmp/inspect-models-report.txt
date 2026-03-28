@@ -1,0 +1,58 @@
+Diagnostic Python du module `odoo/addons/marketplace` :
+
+- `odoo/addons/marketplace/models/product.py`
+  - Le champ vendeur existe bien côté produit, sur le bon modèle attendu pour le formulaire produit standard Odoo :
+    - `class ProductTemplate(models.Model):`
+    - `_inherit = 'product.template'`
+    - `vendor_id = fields.Many2one('res.partner', string="Vendor")`
+  - Donc, côté Python, il y a bien un champ `vendor_id` sur `product.template`.
+  - Pas de `domain`, pas de `compute`, pas de `store`, pas de `related`, pas de `groups`, pas d’attribut particulier : ce champ est simple et devrait être affichable si la vue référence bien `vendor_id` sur `product.template`.
+
+- `odoo/addons/marketplace/models/res_partner.py`
+  - Le module ajoute :
+    - `is_vendor = fields.Boolean(string="Is Vendor")`
+    - `shop_name = fields.Char(string="Shop Name")`
+    - `product_ids = fields.One2many('product.template', 'vendor_id')`
+  - La relation inverse est cohérente avec `product.template.vendor_id`.
+  - Incohérence fonctionnelle potentielle :
+    - `vendor_id` n’a aucun domaine du type `[('is_vendor', '=', True)]`.
+    - Donc la logique métier “vendeur” existe partiellement sur `res.partner`, mais n’est pas appliquée au champ produit.
+    - Cela n’empêche pas l’affichage du champ, mais montre que la définition Python est minimale/incomplète.
+
+- `odoo/addons/marketplace/models/sale_order.py`
+  - Ajoute aussi `vendor_id = fields.Many2one('res.partner', string="Vendor")` sur `sale.order`.
+  - Aucun lien automatique avec le `vendor_id` du produit, aucun compute, aucune propagation.
+  - Là encore, cela n’empêche pas l’affichage sur le produit, mais confirme qu’il n’y a pas de logique métier aboutie autour du vendeur.
+
+- `odoo/addons/marketplace/models/__init__.py`
+  - Les trois fichiers modèles sont bien importés :
+    - `res_partner`
+    - `product`
+    - `sale_order`
+  - Donc si le module est installé/chargé, les champs Python devraient bien être enregistrés.
+
+- `odoo/addons/marketplace/__manifest__.py`
+  - Dépendances :
+    - `base`, `product`, `sale`
+  - Pour la définition Python du champ vendeur produit, la dépendance `product` est suffisante.
+  - Les modèles sont donc cohérents avec les dépendances déclarées.
+  - Le fichier de sécurité `security/ir.model.access.csv` est commenté, mais ce n’est pas bloquant ici car les modèles sont hérités, pas de nouveau modèle créé.
+  - Les vues incluent bien `views/product_view.xml`, donc le problème n’est probablement pas l’absence de chargement de la vue produit dans le manifest.
+
+Conclusion ciblée sur la cause probable côté Python :
+- Je ne vois pas de cause bloquante côté définition Python qui empêcherait à elle seule l’affichage du champ.
+- Le champ vendeur est bien défini sur `product.template`, qui est le bon modèle si la vue hérite du formulaire produit template standard.
+- Les incohérences Python relevées sont surtout fonctionnelles, pas bloquantes pour l’affichage :
+  - absence de domaine sur `vendor_id` pour filtrer `res.partner.is_vendor`
+  - absence de logique de synchronisation avec `sale.order.vendor_id`
+- La cause la plus probable de non-affichage est donc plutôt côté vue XML que côté modèle Python, sauf si la vue cible `product.product` avec le champ `vendor_id` alors que le champ n’existe que sur `product.template`.
+
+Références précises :
+- `odoo/addons/marketplace/models/product.py` : champ `vendor_id` sur `product.template`
+- `odoo/addons/marketplace/models/res_partner.py` : `is_vendor`, `shop_name`, `product_ids = One2many('product.template', 'vendor_id')`
+- `odoo/addons/marketplace/models/sale_order.py` : champ `vendor_id` sur `sale.order`
+- `odoo/addons/marketplace/models/__init__.py` : imports OK
+- `odoo/addons/marketplace/__manifest__.py` : dépendances et chargement des vues OK
+
+Point de vigilance à transmettre au parent / à l’agent vues :
+- Vérifier que `views/product_view.xml` insère bien `<field name="vendor_id"/>` dans une vue héritée de `product.template` / `product.product_template_only_form_view`, et non dans un contexte où le champ attendu serait sur `product.product`.

@@ -25,6 +25,13 @@ Plateforme web permettant :
   python odoo-bin -d marketplace_db
 ```
 
+## Lancer interface en ligne
+```
+  cd /home/jakk/Bureau/repository/AuraMarket/odoo
+  source ../venv/bin/activate
+  python odoo-bin -d marketplace_db --db-filter=marketplace_db --addons-path=addons
+```
+
 ## Roadmap
 - MVP : produits, vendeurs, commandes
 - Phase 2 : UI/UX, interactions
