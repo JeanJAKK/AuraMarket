@@ -33,7 +33,7 @@ Plateforme web permettant :
 ## Lancer interface en ligne
 
 ```
-  cd /home/jakk/Bureau/repository/AuraMarket/odoo
+  cd /home/jakk/Bureau/repository/MarketHub/odoo
   source ../venv/bin/activate
   python odoo-bin -d marketplace_db -u marketplace --dev=all
 ```
