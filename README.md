@@ -43,3 +43,4 @@ Plateforme web permettant :
 - MVP : produits, vendeurs, commandes
 - Phase 2 : UI/UX, interactions
 - Phase 3 : commissions, paiement multi-vendeur
+- Phase 4 : déployable I
