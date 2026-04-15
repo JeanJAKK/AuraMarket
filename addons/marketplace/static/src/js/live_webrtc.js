@@ -218,6 +218,9 @@
     var placeholderEl = $("video-placeholder");
     var videoEl = $("remote-video");
 
+    var unmuteBtn = $("marketplace-live-unmute");
+    var unmuteListenerBound = false;
+
     var startBtn = $("marketplace-webrtc-start");
     var stopBtn = $("marketplace-webrtc-stop");
 
@@ -660,6 +663,50 @@
     var broadcasterPcs = new Map();
     var broadcasterPendingIce = new Map();
 
+    function showUnmuteButton() {
+      if (!unmuteBtn) return;
+      unmuteBtn.style.display = "inline-block";
+    }
+
+    function hideUnmuteButton() {
+      if (!unmuteBtn) return;
+      unmuteBtn.style.display = "none";
+    }
+
+    function unmuteAndPlay() {
+      if (!videoEl) return;
+      try {
+        videoEl.muted = false;
+        videoEl.removeAttribute("muted");
+      } catch (e) {
+        // ignore
+      }
+
+      var p;
+      try {
+        p = videoEl.play();
+      } catch (e2) {
+        p = null;
+      }
+
+      if (p && typeof p.then === "function") {
+        p.then(function () {
+          hideUnmuteButton();
+        }).catch(function () {
+          // Some browsers require an explicit user gesture to start audio.
+          try {
+            videoEl.muted = true;
+          } catch (e3) {
+            // ignore
+          }
+          showUnmuteButton();
+          videoEl.play().catch(function () {});
+        });
+      } else {
+        hideUnmuteButton();
+      }
+    }
+
     async function signal(receiver, kind, payload) {
       return postJson("/live/" + liveId + "/webrtc/signal", {
         sender: clientId,
@@ -821,6 +868,9 @@
           videoEl.muted = true;
           showVideo(videoEl, placeholderEl);
           videoEl.play().catch(function () {});
+
+          // Make it obvious how to enable audio.
+          showUnmuteButton();
         }
       };
 
@@ -844,13 +894,19 @@
         videoEl.addEventListener(
           "click",
           function () {
-            if (videoEl.muted) {
-              videoEl.muted = false;
-              videoEl.play().catch(function () {});
-            }
+            unmuteAndPlay();
           },
           { once: true },
         );
+      }
+
+      if (unmuteBtn) {
+        if (!unmuteListenerBound) {
+          unmuteBtn.addEventListener("click", function () {
+            unmuteAndPlay();
+          });
+          unmuteListenerBound = true;
+        }
       }
     }
 

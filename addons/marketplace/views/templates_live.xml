@@ -141,6 +141,11 @@
                                     &#128100; <span id="viewer-count"><t t-esc="live.viewer_count"/></span>
                                 </div>
                                 <t t-if="not is_broadcaster">
+                                    <button id="marketplace-live-unmute" type="button"
+                                        class="btn btn-sm btn-outline-light"
+                                        style="display:none;">
+                                        Activer le son
+                                    </button>
                                     <a href="/live" class="btn btn-sm btn-outline-light">
                                         Quitter le live
                                     </a>
