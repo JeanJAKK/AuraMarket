@@ -1,0 +1,311 @@
+                   MarketHub — Live Shopping
+Conception et integration du systeme de vente en direct
+
+JeanJAKK — Avril 2026
+
+
+
+
+Vision du produit
+Le Live Shopping est la fusion entre un stream video en direct et une boutique en ligne. Le vendeur
+presente ses produits en temps reel devant une audience qui peut interagir, liker, commenter et acheter
+sans quitter le stream. C'est le modele qui a genere des milliards en Asie (TikTok Shop, Taobao Live) et
+qui arrive en Afrique avec un potentiel enorme.
+
+  MarketHub a deja les briques : vendeurs, produits, likes, commentaires, panier, commandes,
+  notifications. Le Live Shopping est l'extension naturelle de tout ca.
+
+Ce que vivra l'utilisateur :
+ Acteur             Experience
+ Vendeur            Lance un live depuis son dashboard, presente ses produits, repond aux questions en direct, met des produits e
+
+ Client             Regarde le stream, like, commente, clique sur le produit mis en avant, achete en 2 clics sans quitter le live, reco
+
+ Spectateur         Regarde le live, voit les achats des autres (social proof), est encourage a acheter a son tour
+Architecture technique
+
+Composants necessaires
+ Composant             Technologie               Role                                 Cout
+ Stream video          WebRTC ou HLS             Transmission video en direct         0$ (navigateur natif)
+
+ Signaling server      WebSocket (Python)        Coordonner les connexions WebRTC
+                                                                                Inclus dans Odoo
+
+ Chat temps reel       WebSocket Odoo bus        Likes et commentaires live           0$ (deja dans Odoo)
+
+ Achat instantane      marketplace.order existant
+                                               Commander depuis le live               0$ (deja code)
+
+ Paiement              Simulation existante + Mobile
+                                               Confirmer
+                                                     Money
+                                                         la transaction               Commission %
+
+ TURN server           Coturn (gratuit)          Relai video si WebRTC bloque         0$ sur Oracle VPS
+
+
+Nouveaux modeles Odoo a creer
+ Modele                   Champs principaux                            Role
+ marketplace.live         vendor_id, title, status, start_time, end_time,
+                                                                       Session
+                                                                          viewer_count,
+                                                                                de live shopping
+                                                                                         stream_key
+
+ marketplace.live.product live_id, product_id, is_featured, special_price,
+                                                                       Produit
+                                                                           order_count
+                                                                               mis en avant pendant le live
+
+ marketplace.live.reactionlive_id, partner_id, type (like/heart/fire), created_at
+                                                                          Reactions en temps reel
+
+ marketplace.live.comment
+                       live_id, partner_id, content, created_at, is_pinned
+                                                                    Commentaires du live
+
+ marketplace.live.order   live_id, order_id, created_during_live       Commandes passees pendant le live
+Interface utilisateur — Layout du Live
+
+Structure de la page /live/
+  La page est divisee en trois zones verticales : ZONE GAUCHE (70% largeur) — Le stream video -
+  Video en plein ecran avec overlay - Nom du vendeur + avatar en haut a gauche - Compteur de
+  spectateurs en haut a droite - Animations de likes flottantes (coeurs qui montent) - Bandeau
+  produit en avant en bas (nom + prix + bouton Acheter) ZONE DROITE (30% largeur) —
+  Interactions - Flux de commentaires defilant (style TikTok) - Champ pour ecrire un
+  commentaire - Bouton Like (coeur) avec compteur anime - Bouton Feu et Applaudissement -
+  Mini-carte du produit en vedette avec bouton Acheter
+
+
+Experience d'achat pendant le live
+  1. Vendeur met un produit en avant → bandeau apparait en bas du stream 2. Client clique
+  'Acheter' → popup s'ouvre SANS quitter le live 3. Client confirme la quantite et son adresse
+  4. Client clique 'Confirmer' → commande creee, paiement simule 5. Notification apparait dans
+  le stream : 'Alice vient d'acheter Sac en cuir !' 6. Autres spectateurs voient la notif →
+  effet social proof → plus d'achats
+
+ L'achat se fait en moins de 10 secondes sans quitter le stream. C'est la cle du succes du live shopping.
+Flux d'achat detaille
+
+Du clic au paiement
+             EtapeAction utilisateur              Action systeme                                 Temps
+             1      Voit le produit en vedette dans
+                                                 Vendeur
+                                                    le live a appele /live/<id>/feature/<product_id>
+                                                                                                  0s
+
+             2      Clique sur 'Acheter maintenant'
+                                                Popup s'ouvre avec details produit + prix live 1s
+
+             3      Verifie la quantite (defaut: 1)Affiche prix normal vs prix live special      3s
+
+             4      Clique 'Confirmer l'achat'    POST /live/<id>/buy avec product_id + qty      5s
+
+             5      Popup de confirmation         marketplace.cart.create() + checkout() + split()7s
+                                                                                                   + simulate_payment()
+
+             6      Voit 'Commande confirmee !'Notification broadcast a tous les spectateurs 8s
+
+             7      Continue a regarder le live Son nom apparait dans le flux : 'X vient d'acheter
+                                                                                               9s Y !'
+
+
+Confirmation de paiement — 3 modes
+ Mode                  Fonctionnement                                        Integration
+ Simulation (Phase 3 actuelle)
+                     Paiement marque 'paid' instantanement, referenceDeja
+                                                                      WEB-SXXXXX
+                                                                          code dans marketplace.order.service
+
+ Mobile Money (PhaseClient
+                     4) entre son numero Orange Money / MTN, OTP
+                                                              APIenvoye,
+                                                                  Orangeconfirmation
+                                                                         Money Togoen/ MTN
+                                                                                       temps
+                                                                                           API
+                                                                                             reel
+
+ Paiement differe      Client commande pendant le live, paie dans les 24h
+                                                                       marketplace.notification
+                                                                          via un lien envoye parexistant
+                                                                                                 notification
+
+ Pour le lancement : garder la simulation. Integrer Mobile Money en Phase 4 quand la plateforme a ses
+ premiers vrais vendeurs.
+Systeme d'interactions temps reel
+
+Likes et reactions
+Les reactions sont ephemeres (pas stockees en base sauf le total) et visuelles. Quand un spectateur like,
+un coeur anime flotte vers le haut sur l'ecran de tous. C'est l'element le plus engageant visuellement du
+live shopping.
+
+ Reaction             Emoji         Animation                                 Stockage
+ Like                 Coeur rouge Flotte vers le haut, disparait en 2s        Compteur total en base
+
+ Feu                  Flamme orange
+                                  Explose et disparait en 1.5s                Compteur total en base
+
+ Applaudissement Mains              Rebondit et disparait                     Compteur total en base
+
+ Achat                Sac vert      Grand, reste 3s visible par tous          marketplace.live.order
+
+
+Commentaires en direct
+  - Flux de commentaires qui defilent de bas en haut (style TikTok / YouTube Live) - Chaque
+  commentaire affiche : avatar (initiale) + nom + texte - Vendeur peut epingler un commentaire
+  (is_pinned=True) → reste en haut - Filtre automatique : les commentaires de plus de 30s
+  disparaissent du flux visuel - Stockes en base dans marketplace.live.comment pour historique
+  - Moderateur possible : vendeur peut supprimer un commentaire
+
+
+Notifications sociales pendant le live
+        Evenement                    Message affiche dans le stream                              Duree
+        Nouvel acheteur              Alice vient d'acheter Sac en cuir — 24 500 FCFA !           4s
+
+        Nouveau spectateur           Bob rejoint le live (127 spectateurs)                       2s
+
+        Milestone likes              1 000 likes ! Merci a tous !                                5s
+
+        Produit epuise               Sac en cuir — STOCK EPUISE !                                persistant
+
+        Fin du live                  Merci ! Replay disponible dans votre historique             persistant
+Dashboard vendeur pendant le live
+Le vendeur a un panneau de controle sur son appareil (telephone ou second ecran) pendant qu'il streame
+depuis la camera principale.
+
+ Section                    Contenu                                     Action possible
+ Stats live                 Spectateurs actifs, likes total, revenus en cours
+                                                                         Lecture seule
+
+ Produits                   Liste de ses produits avec stock            Clic pour mettre en avant
+
+ Produit en vedette         Produit actuellement mis en avant + prix special
+                                                                       Modifier le prix, retirer
+
+ Commentaires               Flux temps reel des commentaires            Epingler, supprimer
+
+ Commandes recues           Liste des achats pendant le live en temps reel
+                                                                       Voir details
+
+ Controles                  Bouton demarrer/arreter le live             Start / Stop / Pause
+
+
+Routes a creer pour le vendeur :
+ Route                                 Methode        Role
+ /my/vendor/live/new                   GET            Formulaire de creation d'un live
+
+ /my/vendor/live/start                 POST           Demarre le live, genere stream_key
+
+ /my/vendor/live/<id>/feature/<product_id>
+                                    POST              Met un produit en avant
+
+ /my/vendor/live/<id>/end              POST           Termine le live
+
+ /live/<id>                            GET            Page publique du live (spectateurs)
+
+ /live/<id>/buy                        POST           Achat depuis le live
+
+ /live/<id>/react                      POST           Envoyer une reaction (like, feu...)
+
+ /live/<id>/comment                    POST           Poster un commentaire
+
+ /live/<id>/stream                     WebSocket      Canal temps reel (reactions, commentaires, achats)
+Technologie video — Comment ca marche
+
+Option A — WebRTC (recommande pour commencer)
+WebRTC est integre dans tous les navigateurs modernes. Le vendeur streame depuis son navigateur, les
+spectateurs recoivent le flux directement. Pas de serveur video necessaire pour de petites audiences
+(moins de 50 spectateurs).
+
+  Avantages : latence ultra-faible (moins de 1 seconde), gratuit, natif navigateur
+  Inconvenients : difficile a scaler au-dela de 100 spectateurs simultanement
+
+
+Option B — HLS via un serveur RTMP (pour scaler)
+Le vendeur streame depuis OBS Studio ou son telephone vers un serveur RTMP. Le serveur convertit en
+HLS et distribue a tous les spectateurs. Supporte des milliers de spectateurs simultanement.
+
+  Stack recommandee : nginx-rtmp (gratuit sur Oracle VPS) + hls.js cote client Latence : 3 a 10
+  secondes (acceptable pour le shopping)
+
+  Pour le lancement : WebRTC suffit. Migrer vers HLS quand le besoin se presente.
+
+Temps reel pour les interactions
+Odoo a deja un systeme de bus (odoo/addons/bus) base sur WebSocket ou long-polling. On s'en sert
+pour broadcaster les reactions, commentaires et notifications d'achat a tous les spectateurs connectes en
+temps reel sans infrastructure supplementaire.
+
+  env['bus.bus'].sendone('live.'+str(live_id), 'reaction', {'type': 'like', 'user': 'Alice'})
+Plan d'implementation en 4 sprints
+ Sprint     Duree       Livrable                                            Prerequis
+ Sprint 1 —1Modeles
+             semaine    marketplace.live, marketplace.live.product, marketplace.live.comment,
+                                                                             Phase 3 completemarketplace.live.reaction
+                        Routes basiques : /live/<id>, /my/vendor/live/new
+                        Page live statique (sans video)
+
+ Sprint 2 —1Video
+             semaine    Integration WebRTC dans la page live                Sprint 1
+                        Dashboard vendeur avec controles
+                        Mise en avant de produits en direct
+
+ Sprint 3 —1Interactions
+              semaine Reactions temps reel (likes flottants)                Sprint 2
+                         Commentaires defilants via Odoo bus
+                         Notifications d'achat broadcast
+                         Achat depuis le live (popup)
+
+ Sprint 4 —1Polish
+             semaine    Animations CSS des coeurs                           Sprint 3
+                        Historique des lives (replay)
+                        Stats vendeur post-live
+                        Tests et optimisation
+
+
+Ce qu'on reutilise de l'existant :
+ Existant                           Reutilisation dans le Live
+ marketplace.product.like           Like produit depuis le live → meme modele
+
+ marketplace.product.comment        Commentaire produit post-live → meme modele
+
+ marketplace.cart + checkout()      Achat depuis le live → meme flux
+
+ marketplace.order.service          Split + commission + paiement simule → identique
+
+ marketplace.notification           Notification achat pendant live → meme systeme
+
+ vendor_profile template            Base pour la page live du vendeur
+Modele economique du Live Shopping
+Le live shopping genere naturellement plus de revenus que le e-commerce classique. Les statistiques
+mondiales montrent un taux de conversion 10x superieur lors des lives vs les pages produit statiques.
+
+ Source de revenu           Mecanisme                                   Commission MarketHub
+ Achat pendant le live      marketplace.order avec commission_rate 10% (configurable par vendeur)
+
+ Live premium               Vendeur paye pour apparaitre en tete de liste
+                                                                      Prix fixe mensuel
+
+ Boost de produit           Produit mis en avant pendant 24h            Prix fixe par produit
+
+ Abonnement vendeur pro     Acces aux stats avancees, replay illimite   Prix mensuel
+
+
+Projections pour les premiers mois :
+ Scenario           Vendeurs actifs   Lives/mois        Ventes estimees                    Revenu MarketHub (10%)
+ Lancement          5                 10                500 000 FCFA                       50 000 FCFA
+
+ Croissance         20                60                3 000 000 FCFA                     300 000 FCFA
+
+ Maturite           100               400               20 000 000 FCFA                    2 000 000 FCFA
+
+
+  Le live shopping est la fonctionnalite differentiatrice de MarketHub. Aucune plateforme africaine de
+  e-commerce ne propose actuellement un live shopping integre nativement. C'est une opportunite de
+  marche considerable.
+
+
+
+
+Document de conception — MarketHub Live Shopping — JeanJAKK — Avril 2026
+
