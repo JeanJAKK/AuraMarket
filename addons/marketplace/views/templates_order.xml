@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Page messagerie par commande -->
+    <template id="order_messages" name="Messages commande">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5" style="max-width:700px;">
+
+                    <!-- Breadcrumb -->
+                    <nav class="mb-4">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="/my/vendor/dashboard">Dashboard</a>
+                            </li>
+                            <li class="breadcrumb-item active">
+                                Messages — <t t-esc="order.name"/>
+                            </li>
+                        </ol>
+                    </nav>
+
+                    <!-- En-tête commande -->
+                    <div class="card border-0 shadow-sm mb-4 p-4">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="fw-bold mb-1"><t t-esc="order.name"/></h4>
+                                <p class="text-muted mb-0">
+                                    <t t-if="partner.id == order.customer_id.id">
+                                        Vendeur : <t t-esc="order.vendor_id.shop_name or order.vendor_id.name"/>
+                                    </t>
+                                    <t t-else="">
+                                        Client : <t t-esc="order.customer_id.name"/>
+                                    </t>
+                                </p>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-bold text-primary">
+                                    <t t-esc="order.amount_total"/> FCFA
+                                </div>
+                                <span t-att-class="'badge ' + ('bg-success' if order.payment_state == 'paid' else 'bg-warning text-dark')">
+                                    <t t-esc="order.payment_state"/>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Zone messages -->
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-body p-4"
+                            style="min-height:300px;max-height:500px;overflow-y:auto;"
+                            id="messages-container">
+                            <t t-if="not messages">
+                                <p class="text-muted text-center py-5">
+                                    Aucun message. Démarrez la conversation.
+                                </p>
+                            </t>
+                            <t t-foreach="messages" t-as="msg">
+                                <t t-set="is_mine" t-value="msg.sender_id.id == partner.id"/>
+                                <div t-att-class="'d-flex mb-3 ' + ('justify-content-end' if is_mine else '')">
+                                    <div t-att-style="'max-width:70%;padding:12px 16px;border-radius:16px;' + ('background:#667eea;color:white;border-bottom-right-radius:4px;' if is_mine else 'background:#f0f0f0;border-bottom-left-radius:4px;')">
+                                        <div style="font-size:12px;margin-bottom:4px;opacity:0.8;">
+                                            <t t-esc="msg.sender_id.name"/>
+                                        </div>
+                                        <div><t t-esc="msg.content"/></div>
+                                        <div style="font-size:11px;margin-top:4px;opacity:0.7;text-align:right;">
+                                            <t t-esc="msg.create_date"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- Formulaire envoi -->
+                    <form t-attf-action="/marketplace/order/#{order.id}/message/send"
+                        method="post">
+                        <input type="hidden" name="csrf_token"
+                            t-att-value="request.csrf_token()"/>
+                        <div class="input-group">
+                            <input type="text" name="content"
+                                class="form-control form-control-lg"
+                                placeholder="Écrire un message..."
+                                autocomplete="off" autofocus=""/>
+                            <button type="submit" class="btn btn-primary px-4">
+                                Envoyer
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Scroll auto vers le bas -->
+                    <script>
+                        var container = document.getElementById('messages-container');
+                        if (container) container.scrollTop = container.scrollHeight;
+                    </script>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Page notifications -->
+    <template id="notifications_page" name="Mes notifications">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5" style="max-width:700px;">
+                    <h1 class="fw-bold mb-4">Mes notifications</h1>
+
+                    <t t-if="not notifications">
+                        <div class="text-center py-5 text-muted">
+                            <div style="font-size:48px;">🔔</div>
+                            <p>Aucune notification.</p>
+                        </div>
+                    </t>
+
+                    <t t-foreach="notifications" t-as="notif">
+                        <div t-att-class="'card border-0 shadow-sm mb-3 ' + ('' if notif.is_read else 'border-start border-primary border-3')">
+                            <div class="card-body p-4">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span t-att-class="'badge ' + ('bg-primary' if notif.type == 'order' else 'bg-success' if notif.type == 'social' else 'bg-secondary')">
+                                                <t t-esc="notif.type"/>
+                                            </span>
+                                            <h6 class="fw-bold mb-0">
+                                                <t t-esc="notif.title"/>
+                                            </h6>
+                                        </div>
+                                        <p class="text-muted mb-0" style="white-space:pre-line;">
+                                            <t t-esc="notif.message"/>
+                                        </p>
+                                    </div>
+                                    <small class="text-muted ms-3" style="white-space:nowrap;">
+                                        <t t-esc="notif.create_date"/>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>

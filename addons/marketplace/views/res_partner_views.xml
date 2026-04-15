@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_inherit_marketplace" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.marketplace</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='sales_purchases']" position="inside">
+                <group string="Marketplace" name="marketplace">
+                    <field name="is_vendor"/>
+                    <field name="shop_name" invisible="not is_vendor"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

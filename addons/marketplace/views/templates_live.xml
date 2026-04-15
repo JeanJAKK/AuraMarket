@@ -1,0 +1,626 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Live shopping -->
+    <!-- Liste des lives -->
+    <template id="live_list" name="Lives en direct">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5">
+                    <div class="d-flex align-items-center gap-3 mb-5">
+                        <h1 class="fw-bold mb-0">Live Shopping</h1>
+                        <span class="badge bg-danger" style="font-size:14px;">LIVE</span>
+                    </div>
+
+                    <t t-if="not lives">
+                        <div class="text-center py-5 text-muted">
+                            <div style="font-size:64px;">📺</div>
+                            <h4>Aucun live en ce moment</h4>
+                            <p>Revenez bientot ou suivez vos vendeurs favoris.</p>
+                            <a href="/vendors" class="btn btn-primary">Voir les vendeurs</a>
+                        </div>
+                    </t>
+
+                    <div class="row g-4">
+                        <t t-foreach="lives" t-as="live">
+                            <div class="col-md-4">
+                                <a t-attf-href="/live/#{live.id}" style="text-decoration:none;">
+                                    <div class="card border-0 shadow-sm h-100"
+                                        style="transition:transform 0.2s;"
+                                        onmouseover="this.style.transform='translateY(-4px)'"
+                                        onmouseout="this.style.transform='translateY(0)'">
+
+                                        <!-- Thumbnail -->
+                                        <div style="height:180px;background:linear-gradient(135deg,#667eea,#764ba2);position:relative;border-radius:8px 8px 0 0;">
+                                            <div class="position-absolute top-0 start-0 m-2">
+                                                <t t-if="live.status == 'live'">
+                                                    <span class="badge bg-danger">
+                                                        &#9679; EN DIRECT
+                                                    </span>
+                                                </t>
+                                                <t t-elif="live.status == 'scheduled'">
+                                                    <span class="badge bg-secondary">Programme</span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="badge bg-dark">Replay</span>
+                                                </t>
+                                            </div>
+                                            <div class="position-absolute top-0 end-0 m-2">
+                                                <span class="badge bg-dark bg-opacity-75">
+                                                    &#128100; <t t-esc="viewer_counts.get(live.id, live.viewer_count)"/>
+                                                </span>
+                                            </div>
+                                            <div class="d-flex align-items-center justify-content-center h-100">
+                                                <div style="width:60px;height:60px;border-radius:50%;background:white;opacity:0.9;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#667eea;">
+                                                    <t t-esc="(live.vendor_id.shop_name or live.vendor_id.name or 'V')[0].upper()"/>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="card-body p-3">
+                                            <h5 class="fw-bold mb-1">
+                                                <t t-esc="live.name"/>
+                                            </h5>
+                                            <p class="text-muted small mb-2">
+                                                <t t-esc="live.vendor_id.shop_name or live.vendor_id.name"/>
+                                            </p>
+                                            <div class="d-flex gap-3 text-muted" style="font-size:12px;">
+                                                <span>&#10084; <t t-esc="live.like_count"/></span>
+                                                <span>&#128172; <t t-esc="live.comment_count"/></span>
+                                                <span>&#128722; <t t-esc="live.order_count"/></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Page de visionnage du live -->
+    <template id="live_watch" name="Live Watch">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <t t-set="is_broadcaster"
+                   t-value="request.env.user.id != request.env.ref('base.public_user').id and request.env.user.partner_id.id == live.vendor_id.id"/>
+                <div id="marketplace-live-config"
+                    t-attf-data-live-id="#{live.id}"
+                    t-attf-data-live-status="#{live.status}"
+                    t-attf-data-broadcaster-id="vendor-#{live.vendor_id.id}"
+                    t-attf-data-is-broadcaster="#{'1' if is_broadcaster else '0'}"
+                    t-attf-data-last-reaction-id="#{last_reaction_id}"
+                    t-attf-data-last-order-id="#{last_order_id}"
+                    t-att-data-csrf-token="request.csrf_token()"
+                    style="display:none;"/>
+                <style>
+                    .live-container { display:flex; gap:0; height:calc(100vh - 60px); }
+                    .live-video { flex:1; background:#000; position:relative; min-height:400px; }
+                    .live-sidebar { width:340px; display:flex; flex-direction:column; border-left:1px solid #eee; }
+                    .live-comments-feed { flex:1; overflow-y:auto; padding:12px; background:#fafafa; }
+                    .live-comment-item { display:flex; gap:8px; margin-bottom:10px; align-items:flex-start; }
+                    .live-comment-avatar { width:28px;height:28px;border-radius:50%;background:#667eea;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0; }
+                    .live-comment-bubble { background:white;border-radius:12px;padding:6px 10px;box-shadow:0 1px 3px rgba(0,0,0,0.1);max-width:240px; }
+                    .live-featured { background:#1a1a2e;color:white;padding:12px 16px;display:flex;align-items:center;gap:12px; }
+                    .live-reactions { padding:12px;border-top:1px solid #eee;display:flex;gap:8px; }
+                    .live-comment-form { padding:10px;border-top:1px solid #eee; }
+                    .live-overlay-top { position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;z-index:10; }
+                    .live-placeholder { display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;color:white; }
+                    @keyframes floatHeart { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-120px) scale(1.5)} }
+                    .floating-heart { position:absolute;bottom:80px;right:20px;font-size:28px;animation:floatHeart 2s ease-out forwards;pointer-events:none; }
+                </style>
+
+                <div class="live-container">
+
+                    <!-- Zone video -->
+                    <div class="live-video" id="live-video-zone">
+                        <div class="live-overlay-top">
+                            <!-- Vendeur -->
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width:36px;height:36px;border-radius:50%;background:#667eea;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;">
+                                    <t t-esc="(live.vendor_id.shop_name or live.vendor_id.name or 'V')[0].upper()"/>
+                                </div>
+                                <div>
+                                    <div class="text-white fw-bold" style="font-size:14px;">
+                                        <t t-esc="live.vendor_id.shop_name or live.vendor_id.name"/>
+                                    </div>
+                                    <span id="live-status-badge"
+                                        t-att-class="'badge ' + ('bg-danger' if live.status == 'live' else 'bg-secondary')"
+                                        style="font-size:10px;">
+                                        <t t-if="live.status == 'live'">&#9679; EN DIRECT</t>
+                                        <t t-elif="live.status == 'scheduled'">Programme</t>
+                                        <t t-else="">Terminé</t>
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Spectateurs -->
+                            <div class="badge bg-dark bg-opacity-75 d-flex align-items-center gap-1" style="font-size:13px;">
+                                &#128100; <span id="viewer-count"><t t-esc="live.viewer_count"/></span>
+                            </div>
+                        </div>
+
+                        <!-- Controles vendeur (Sprint 2 : demarrage camera WebRTC) -->
+                        <t t-if="is_broadcaster">
+                            <div class="position-absolute"
+                                style="bottom:16px;left:16px;z-index:20;display:flex;gap:8px;">
+                                <button id="marketplace-webrtc-start" type="button"
+                                    class="btn btn-sm btn-light">
+                                    Démarrer la caméra
+                                </button>
+                                <button id="marketplace-webrtc-stop" type="button"
+                                    class="btn btn-sm btn-outline-light"
+                                    style="display:none;">
+                                    Arrêter
+                                </button>
+                            </div>
+                        </t>
+
+                        <!-- Placeholder video (Sprint 2 : WebRTC ici) -->
+                        <div class="live-placeholder" id="video-placeholder">
+                            <div style="font-size:80px;">📺</div>
+                            <h3 class="text-white mt-3"><t t-esc="live.name"/></h3>
+                            <t t-if="live.status == 'scheduled'">
+                                <p class="text-white-50">Ce live n'a pas encore commence</p>
+                            </t>
+                            <t t-elif="live.status == 'ended'">
+                                <p class="text-white-50">Ce live est termine</p>
+                            </t>
+                            <t t-else="">
+                                <p class="text-white-50">Connexion au stream en cours...</p>
+                            </t>
+                        </div>
+
+                        <!-- VIDEO WebRTC (Sprint 2) -->
+                        <video id="remote-video" autoplay="autoplay" playsinline="playsinline"
+                            style="width:100%;height:100%;object-fit:cover;display:none;"/>
+
+                        <!-- Produit en vedette -->
+                        <div id="live-featured-banner" class="live-featured position-absolute"
+                            t-att-style="'bottom:0;left:0;right:0;' + ('' if featured else 'display:none;')">
+                            <div style="font-size:11px;color:#aaa;margin-bottom:2px;">PRODUIT EN VEDETTE</div>
+                            <div class="d-flex align-items-center justify-content-between w-100">
+                                <div>
+                                    <div id="live-featured-name" class="fw-bold" style="font-size:15px;">
+                                        <t t-if="featured">
+                                            <t t-esc="featured.product_id.name"/>
+                                        </t>
+                                    </div>
+                                    <div id="live-featured-price" style="color:#ffd700;font-size:14px;">
+                                        <t t-if="featured">
+                                            <t t-if="featured.special_price">
+                                                <t t-esc="featured.special_price"/> FCFA
+                                                <span id="live-featured-strike" style="color:#aaa;text-decoration:line-through;font-size:12px;margin-left:6px;">
+                                                    <t t-esc="featured.product_id.list_price"/> FCFA
+                                                </span>
+                                            </t>
+                                            <t t-else="">
+                                                <t t-esc="featured.product_id.list_price"/> FCFA
+                                            </t>
+                                        </t>
+                                    </div>
+                                </div>
+                                <t t-if="request.env.user.id != request.env.ref('base.public_user').id">
+                                    <a id="live-featured-buy"
+                                        t-attf-href="#{'/marketplace/cart/add/%s' % featured.product_id.id if featured else '#'}"
+                                        class="btn btn-warning fw-bold"
+                                        style="border-radius:20px;padding:8px 20px;">
+                                        Acheter maintenant
+                                    </a>
+                                </t>
+                                <t t-else="">
+                                    <a href="/register" class="btn btn-outline-light"
+                                        style="border-radius:20px;">
+                                        Connexion pour acheter
+                                    </a>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sidebar interactions -->
+                    <div class="live-sidebar">
+
+                        <!-- En-tete sidebar -->
+                        <div class="p-3 border-bottom">
+                            <div class="fw-bold"><t t-esc="live.name"/></div>
+                            <div class="text-muted small">
+                                &#10084; <span id="live-like-count"><t t-esc="live.like_count"/></span> likes
+                                &#183; &#128722; <span id="live-order-count"><t t-esc="live.order_count"/></span> achats
+                            </div>
+                        </div>
+
+                        <!-- Commentaires -->
+                        <div class="live-comments-feed" id="comments-feed">
+                            <t t-foreach="comments" t-as="comment">
+                                <div class="live-comment-item" t-att-data-comment-id="comment.id">
+                                    <div class="live-comment-avatar">
+                                        <t t-esc="(comment.partner_id.name or 'U')[0].upper()"/>
+                                    </div>
+                                    <div class="live-comment-bubble">
+                                        <div class="live-comment-author" style="font-size:11px;font-weight:700;color:#667eea;">
+                                            <t t-esc="comment.partner_id.name"/>
+                                        </div>
+                                        <div style="font-size:13px;">
+                                            <t t-esc="comment.content"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </t>
+                            <div id="comments-bottom"></div>
+                        </div>
+
+                        <!-- Reactions -->
+                        <div class="live-reactions">
+                            <button onclick="sendReaction('like')"
+                                    class="btn btn-outline-danger btn-sm flex-fill">
+                                &#10084; Like
+                            </button>
+                            <button onclick="sendReaction('fire')"
+                                    class="btn btn-outline-warning btn-sm flex-fill">
+                                &#128293; Feu
+                            </button>
+                            <button onclick="sendReaction('clap')"
+                                    class="btn btn-outline-success btn-sm flex-fill">
+                                &#128079; Bravo
+                            </button>
+                        </div>
+
+                        <!-- Formulaire commentaire -->
+                        <div class="live-comment-form">
+                            <t t-if="request.env.user.id != request.env.ref('base.public_user').id">
+                                <form t-attf-action="/live/#{live.id}/comment" method="post"
+                                    id="comment-form">
+                                    <input type="hidden" name="csrf_token"
+                                        t-att-value="request.csrf_token()"/>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" name="content" id="comment-input"
+                                            class="form-control" placeholder="Commenter..."
+                                            autocomplete="off"/>
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            Envoyer
+                                        </button>
+                                    </div>
+                                </form>
+                            </t>
+                            <t t-else="">
+                                <a href="/register" class="btn btn-outline-primary btn-sm w-100">
+                                    Connectez-vous pour interagir
+                                </a>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- JS interactions -->
+                <script>
+                    var liveId = <t t-esc="live.id"/>;
+
+                    // Scroll vers le bas des commentaires
+                    function scrollComments() {
+                        var feed = document.getElementById('comments-feed');
+                        if (feed) feed.scrollTop = feed.scrollHeight;
+                    }
+                    scrollComments();
+
+                    // Envoyer une reaction
+                    function sendReaction(type) {
+                        fetch('/live/' + liveId + '/react', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                jsonrpc: '2.0',
+                                method: 'call',
+                                params: {
+                                    type: type,
+                                    csrf_token: '<t t-esc="request.csrf_token()"/>'
+                                },
+                                id: Date.now(),
+                            })
+                        });
+                        // Animation locale
+                        var emojis = {like:'&#10084;', fire:'&#128293;', clap:'&#128079;'};
+                        var el = document.createElement('div');
+                        el.className = 'floating-heart';
+                        el.innerHTML = emojis[type] || '&#10084;';
+                        document.getElementById('live-video-zone').appendChild(el);
+                        setTimeout(function(){ el.remove(); }, 2000);
+                    }
+                </script>
+
+                <!-- Popup d'achat (Sprint 3) -->
+                <div class="modal fade" id="live-buy-modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Acheter</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="fw-bold" id="live-buy-product-name"></div>
+                                <div class="text-muted small" id="live-buy-product-price"></div>
+
+                                <div class="mt-3">
+                                    <label class="form-label">Quantité</label>
+                                    <input type="number" class="form-control" id="live-buy-qty" value="1" min="1" max="99"/>
+                                </div>
+
+                                <div class="alert alert-success d-none mt-3" id="live-buy-success"></div>
+                                <div class="alert alert-danger d-none mt-3" id="live-buy-error"></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                    Fermer
+                                </button>
+                                <button type="button" class="btn btn-primary" id="live-buy-confirm">
+                                    Confirmer l'achat
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Formulaire creation live -->
+    <template id="live_new" name="Nouveau Live">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5" style="max-width:600px;">
+                    <nav class="mb-4">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="/my/vendor/dashboard">Dashboard</a>
+                            </li>
+                            <li class="breadcrumb-item active">Nouveau live</li>
+                        </ol>
+                    </nav>
+
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-5">
+                            <h2 class="fw-bold mb-4">Creer un live</h2>
+                            <form action="/my/vendor/live/new" method="post">
+                                <input type="hidden" name="csrf_token"
+                                    t-att-value="request.csrf_token()"/>
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Titre du live *</label>
+                                    <input type="text" name="title" class="form-control form-control-lg"
+                                        placeholder="Ex: Soldes de fin de saison !" required="required"/>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Description</label>
+                                    <textarea name="description" class="form-control" rows="3"
+                                            placeholder="Decrivez ce que vous allez presenter..."></textarea>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-lg w-100"
+                                        style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;">
+                                    Creer le live
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Dashboard vendeur live -->
+    <template id="live_vendor_dashboard" name="Dashboard Live Vendeur">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-4">
+
+                    <div id="marketplace-live-vendor-dashboard-config"
+                        t-attf-data-live-id="#{live.id}"
+                        t-attf-data-live-status="#{live.status}"
+                        t-attf-data-last-order-id="#{last_order_id}"
+                        t-attf-data-last-reaction-id="#{last_reaction_id}"
+                        t-att-data-csrf-token="request.csrf_token()"
+                        style="display:none;"/>
+
+                    <!-- En-tete -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h2 class="fw-bold mb-1"><t t-esc="live.name"/></h2>
+                            <span id="vendor-live-status-badge"
+                                t-att-class="'badge ' + ('bg-danger' if live.status == 'live' else 'bg-secondary')">
+                                <t t-if="live.status == 'live'">&#9679; EN DIRECT</t>
+                                <t t-elif="live.status == 'scheduled'">Programme</t>
+                                <t t-else="">Termine</t>
+                            </span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <!-- Bouton Voir le live -->
+                            <a t-attf-href="/live/#{live.id}" class="btn btn-outline-primary"
+                            target="_blank">
+                                Voir le live
+                            </a>
+                            <!-- Bouton Start/End -->
+                            <t t-if="live.status == 'scheduled'">
+                                <form id="vendor-live-start-form"
+                                    t-attf-action="/my/vendor/live/#{live.id}/start" method="post">
+                                    <input type="hidden" name="csrf_token"
+                                        t-att-value="request.csrf_token()"/>
+                                    <button type="submit" class="btn btn-danger fw-bold">
+                                        &#9679; Demarrer le live
+                                    </button>
+                                </form>
+                            </t>
+                            <t t-elif="live.status == 'live'">
+                                <form id="vendor-live-end-form"
+                                    t-attf-action="/my/vendor/live/#{live.id}/end" method="post">
+                                    <input type="hidden" name="csrf_token"
+                                        t-att-value="request.csrf_token()"/>
+                                    <button type="submit" class="btn btn-dark">
+                                        Terminer le live
+                                    </button>
+                                </form>
+                            </t>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+
+                        <!-- Stats -->
+                        <div class="col-12">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <div class="card border-0 shadow-sm text-center p-3"
+                                        style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;">
+                                        <div class="fs-3 fw-bold" id="stat-viewers">
+                                            <t t-esc="live.viewer_count"/>
+                                        </div>
+                                        <div class="small">Spectateurs</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card border-0 shadow-sm text-center p-3"
+                                        style="background:linear-gradient(135deg,#f093fb,#f5576c);color:white;">
+                                        <div class="fs-3 fw-bold" id="stat-likes">
+                                            <t t-esc="live.like_count"/>
+                                        </div>
+                                        <div class="small">Likes</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card border-0 shadow-sm text-center p-3"
+                                        style="background:linear-gradient(135deg,#11998e,#38ef7d);color:white;">
+                                        <div class="fs-3 fw-bold" id="stat-orders">
+                                            <t t-esc="live.order_count"/>
+                                        </div>
+                                        <div class="small">Commandes</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card border-0 shadow-sm text-center p-3"
+                                        style="background:linear-gradient(135deg,#4facfe,#00f2fe);color:white;">
+                                        <div class="fs-3 fw-bold" id="stat-revenue">
+                                            <t t-esc="live.revenue_total"/> FCFA
+                                        </div>
+                                        <div class="small">Revenus</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Produits a mettre en avant -->
+                        <div class="col-md-6">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <h5 class="fw-bold mb-3">Mettre un produit en vedette</h5>
+                                    <t t-foreach="products" t-as="product">
+                                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <t t-if="product.image_1920">
+                                                    <img t-attf-src="/web/image/product.template/#{product.id}/image_1920/40x40"
+                                                        class="rounded" width="40" height="40"
+                                                        style="object-fit:cover;"/>
+                                                </t>
+                                                <div>
+                                                    <div class="fw-bold" style="font-size:13px;">
+                                                        <t t-esc="product.name"/>
+                                                    </div>
+                                                    <div class="text-primary" style="font-size:12px;">
+                                                        <t t-esc="product.list_price"/> FCFA
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <form t-attf-action="/my/vendor/live/#{live.id}/feature/#{product.id}"
+                                                method="post" class="d-flex gap-1">
+                                                <input type="hidden" name="csrf_token"
+                                                    t-att-value="request.csrf_token()"/>
+                                                <input type="number" name="special_price"
+                                                    class="form-control form-control-sm"
+                                                    style="width:90px;"
+                                                    t-att-placeholder="product.list_price"/>
+                                                <button type="submit" class="btn btn-warning btn-sm">
+                                                    Vedette
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Commentaires recents -->
+                        <div class="col-md-6">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <h5 class="fw-bold mb-3">Commentaires recents</h5>
+                                    <div id="vendor-comments-feed" style="max-height:300px;overflow-y:auto;">
+                                        <t t-if="not live.comment_ids">
+                                            <p id="vendor-comments-empty" class="text-muted text-center py-3">
+                                                Aucun commentaire pour le moment.
+                                            </p>
+                                        </t>
+                                        <t t-foreach="live.comment_ids" t-as="comment">
+                                            <div class="d-flex gap-2 mb-2" t-att-data-comment-id="comment.id">
+                                                <div style="width:28px;height:28px;border-radius:50%;background:#667eea;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">
+                                                    <t t-esc="(comment.partner_id.name or 'U')[0].upper()"/>
+                                                </div>
+                                                <div class="bg-light rounded p-2 flex-fill">
+                                                    <div class="fw-bold" style="font-size:11px;">
+                                                        <t t-esc="comment.partner_id.name"/>
+                                                    </div>
+                                                    <div style="font-size:13px;">
+                                                        <t t-esc="comment.content"/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Commandes recues -->
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body p-4">
+                                    <h5 class="fw-bold mb-3">Commandes recues</h5>
+                                    <div id="vendor-orders-feed" style="max-height:260px;overflow-y:auto;">
+                                        <t t-if="not live_orders">
+                                            <p id="vendor-orders-empty" class="text-muted text-center py-3">
+                                                Aucune commande pour le moment.
+                                            </p>
+                                        </t>
+                                        <t t-foreach="live_orders" t-as="lo">
+                                            <div class="d-flex justify-content-between align-items-start py-2 border-bottom"
+                                                t-att-data-order-id="lo.id">
+                                                <div>
+                                                    <div class="fw-bold" style="font-size:13px;">
+                                                        <t t-esc="lo.order_id.customer_id.name"/>
+                                                    </div>
+                                                    <div class="text-muted small">
+                                                        <t t-foreach="lo.order_id.line_ids" t-as="line">
+                                                            <div>
+                                                                <t t-esc="line.product_id.name"/>
+                                                                × <t t-esc="line.quantity"/>
+                                                            </div>
+                                                        </t>
+                                                    </div>
+                                                </div>
+                                                <div class="fw-bold text-success">
+                                                    <t t-esc="lo.order_id.amount_total"/> FCFA
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>

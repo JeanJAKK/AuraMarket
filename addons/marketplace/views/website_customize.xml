@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- FOOTER -->
+    <template id="auramarket_footer" inherit_id="website.layout"
+              name="MarketHub — Footer et cloche">
+        <!-- Force favicon for website pages -->
+        <xpath expr="//head/*[1]" position="before">
+            <t t-set="x_icon" t-value="'/marketplace/static/src/img/favicon_io/favicon-32x32.png'"/>
+        </xpath>
+
+        <xpath expr="//head/link[last()]" position="after">
+            <link rel="icon" type="image/x-icon" href="/marketplace/static/src/img/favicon_io/favicon.ico"/>
+            <link rel="icon" type="image/png" sizes="32x32" href="/marketplace/static/src/img/favicon_io/favicon-32x32.png"/>
+            <link rel="icon" type="image/png" sizes="16x16" href="/marketplace/static/src/img/favicon_io/favicon-16x16.png"/>
+            <link rel="icon" type="image/png" sizes="192x192" href="/marketplace/static/src/img/favicon_io/android-chrome-192x192.png"/>
+            <link rel="icon" type="image/png" sizes="512x512" href="/marketplace/static/src/img/favicon_io/android-chrome-512x512.png"/>
+            <link rel="apple-touch-icon" sizes="180x180" href="/marketplace/static/src/img/favicon_io/apple-touch-icon.png"/>
+            <link rel="manifest" href="/marketplace/static/src/img/favicon_io/site.webmanifest"/>
+        </xpath>
+
+        <xpath expr="//div[@id='footer']" position="replace">
+            <div id="footer" t-ignore="true" t-if="not no_footer">
+                <section class="py-4" style="background:#1a1a2e;">
+                    <div class="container">
+                        <div class="row align-items-center">
+                            <div class="col-md-4 text-center text-md-start mb-3 mb-md-0">
+                                <span style="color:white;font-size:20px;font-weight:700;">MarketHub</span>
+                                <p style="color:#aaa;font-size:12px;margin:4px 0 0;">Marketplace multi-vendeurs Odoo 17</p>
+                            </div>
+                            <div class="col-md-4 text-center mb-3 mb-md-0">
+                                <a href="mailto:jakkdev27@gmail.com"
+                                   style="color:#aaa;text-decoration:none;margin:0 12px;font-size:13px;">
+                                    ✉ jakkdev27@gmail.com
+                                </a>
+                                <a href="https://github.com/JeanJAKK/" target="_blank"
+                                   style="color:#aaa;text-decoration:none;margin:0 12px;font-size:13px;">
+                                    ⌥ GitHub
+                                </a>
+                            </div>
+                            <div class="col-md-4 text-center text-md-end">
+                                <a href="mailto:jakkdev27@gmail.com" class="btn btn-sm"
+                                   style="background:#667eea;color:white;border-radius:20px;padding:6px 20px;">
+                                    Contact Us
+                                </a>
+                            </div>
+                        </div>
+                        <div class="text-center mt-3"
+                             style="color:#555;font-size:11px;border-top:1px solid #333;padding-top:12px;">
+                            Copyright &#169; 2026 MarketHub &#8212; JeanJAKK
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </xpath>
+
+        <!-- Cloche notifications 
+        <xpath expr="//div[@id='wrapwrap']" position="before">
+            <t t-if="request.env.user.id != request.env.ref('base.public_user').id">
+                <t t-set="unread" t-value="request.env['marketplace.notification'].sudo().search_count([('user_id','=',request.env.user.id),('is_read','=',False)])"/>
+                <div class="position-fixed" style="top:14px;right:210px;z-index:9999;">
+                    <a href="/my/notifications"
+                       class="position-relative d-inline-block"
+                       style="color:#333;font-size:20px;text-decoration:none;">
+                        &#128276;
+                        <t t-if="unread > 0">
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                  style="font-size:9px;">
+                                <t t-esc="unread"/>
+                            </span>
+                        </t>
+                    </a>
+                </div>
+            </t>
+        </xpath>
+        -->
+    </template>
+
+
+    <!-- Badge sur la cloche dans le layout -->
+    <template id="notif_badge" inherit_id="website.layout"
+            name="MarketHub — Badge cloche">
+        <xpath expr="//div[@id='wrapwrap']" position="before">
+            <t t-if="request.env.user.id != request.env.ref('base.public_user').id">
+                <t t-set="unread" t-value="request.env['marketplace.notification'].sudo().search_count([('user_id','=',request.env.user.id),('is_read','=',False)])"/>
+                <t t-if="unread > 0">
+                    <style>
+                        #top_menu li a[href="/my/notifications"]::after {
+                            content: '<t t-esc="unread"/>';
+                            background: #dc3545;
+                            color: white;
+                            border-radius: 50%;
+                            font-size: 9px;
+                            padding: 1px 5px;
+                            margin-left: 3px;
+                            vertical-align: top;
+                        }
+                    </style>
+                </t>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- Désactive la recherche native dans le header -->
+    <record id="website.header_search_box" model="ir.ui.view">
+        <field name="active" eval="False"/>
+    </record>
+</odoo>

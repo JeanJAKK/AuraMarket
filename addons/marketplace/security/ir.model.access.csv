@@ -1,0 +1,24 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_product_public,product public,model_product_template,base.group_public,1,0,0,0
+access_product_user,product user,model_product_template,base.group_user,1,0,0,0
+access_product_vendor,product vendor,model_product_template,marketplace.group_marketplace_vendor,1,1,1,0
+access_product_customer,product customer,model_product_template,marketplace.group_marketplace_customer,1,0,0,0
+access_product_like,marketplace.product.like,model_marketplace_product_like,base.group_public,1,0,0,0
+access_product_like_user,marketplace.product.like user,model_marketplace_product_like,base.group_user,1,1,1,1
+access_product_comment,marketplace.product.comment,model_marketplace_product_comment,base.group_public,1,0,0,0
+access_product_comment_user,marketplace.product.comment user,model_marketplace_product_comment,base.group_user,1,1,1,1
+access_marketplace_order,marketplace.order,model_marketplace_order,base.group_user,1,1,1,0
+access_marketplace_order_line,marketplace.order.line,model_marketplace_order_line,base.group_user,1,1,1,0
+access_marketplace_order_public,marketplace.order public,model_marketplace_order,base.group_public,1,0,0,0
+access_marketplace_cart,marketplace.cart,model_marketplace_cart,base.group_user,1,1,1,1
+access_marketplace_notification,marketplace.notification,model_marketplace_notification,base.group_user,1,1,1,0
+access_marketplace_message,marketplace.message,model_marketplace_message,base.group_user,1,1,1,0
+access_marketplace_live,marketplace.live,model_marketplace_live,base.group_user,1,1,1,0
+access_marketplace_live_product,marketplace.live.product,model_marketplace_live_product,base.group_user,1,1,1,0
+access_marketplace_live_comment,marketplace.live.comment,model_marketplace_live_comment,base.group_user,1,1,1,0
+access_marketplace_live_reaction,marketplace.live.reaction,model_marketplace_live_reaction,base.group_user,1,1,1,1
+access_marketplace_live_order,marketplace.live.order,model_marketplace_live_order,base.group_user,1,1,1,0
+access_marketplace_live_viewer,marketplace.live.viewer,model_marketplace_live_viewer,base.group_user,1,1,1,1
+access_marketplace_live_public,marketplace.live public,model_marketplace_live,base.group_public,1,0,0,0
+access_marketplace_live_comment_public,marketplace.live.comment public,model_marketplace_live_comment,base.group_public,1,0,0,0
+access_marketplace_live_signal,marketplace.live.signal,model_marketplace_live_signal,base.group_user,1,0,0,0

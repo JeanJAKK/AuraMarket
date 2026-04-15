@@ -23,46 +23,27 @@ Plateforme web permettant :
 
 ## Installation
 
-```
-  Corriger le submodule odoo (le mieux)
-  1) *Récupérer l’URL exacte* du dépôt Odoo qu’il veut utiliser (ex: https://github.com/odoo/odoo.git ou un fork).
-  2) À la racine du repo, *créer/ajouter .gitmodules* avec l’entrée :
+Cloner le repo en récupérant automatiquement le submodule Odoo :
 
-  ini
-  [submodule "odoo"]
-      path = odoo
-      url = <URL_DU_DEPOT_ODOO>
-
-
-  3) Puis exécuter (dans son repo local) :
-  bash
-  git submodule sync --recursive
-  git add .gitmodules
-  git add odoo
-  git commit -m "Fix odoo submodule configuration"
-  git push
-
-
-  Après ça, toi (et tout le monde) pourrez faire :
-  bash
-  git clone --recurse-submodules https://github.com/JeanJAKK/AuraMarket.git
-  # ou si déjà cloné
-  git submodule update --init --recursive
+```bash
+git clone --recurse-submodules https://github.com/JeanJAKK/AuraMarket.git
+# ou si déjà cloné
+git submodule update --init --recursive
 ```
 
-```
-  git clone https://github.com/odoo/odoo.git
-  cd odoo
-  pip install -r requirements.txt
-  python odoo-bin -d marketplace_db
+Installer les dépendances Python :
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r odoo/requirements.txt
 ```
 
-## Lancer interface en ligne
+Lancer Odoo en incluant les addons custom du repo (`addons/marketplace`) :
 
-```
-  cd /home/jakk/Bureau/repository/MarketHub/odoo
-  source ../venv/bin/activate
-  python odoo-bin -d marketplace_db -u marketplace --dev=all
+```bash
+source venv/bin/activate
+python odoo/odoo-bin -d marketplace_db --addons-path=odoo/addons,odoo/odoo/addons,addons -u marketplace --dev=all
 ```
 
 ## Roadmap

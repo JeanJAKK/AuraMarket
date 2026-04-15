@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <data>
+    <record model="ir.ui.view" id="marketplace.list">
+      <field name="name">marketplace list</field>
+      <field name="model">marketplace.marketplace</field>
+      <field name="arch" type="xml">
+        <tree string="Marketplace List">
+          <field name="name"/>
+        </tree>
+      </field>
+    </record>
+  </data>
+</odoo>
