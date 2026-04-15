@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Legacy file kept intentionally small.
+
+        QWeb templates were split into:
+        - templates_vendor.xml
+        - templates_search.xml
+        - templates_cart.xml
+        - templates_order.xml
+        - templates_auth.xml
+        - templates_live.xml
+
+        Update the module manifest if you add new template files.
+    -->
+</odoo>

@@ -1,0 +1,11 @@
+<odoo>
+
+    <!-- Vendeur voit uniquement ses produits -->
+    <record id="rule_vendor_own_products" model="ir.rule">
+        <field name="name">Vendor own products</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="groups" eval="[(4, ref('marketplace.group_marketplace_vendor'))]"/>
+        <field name="domain_force">[('vendor_id','=',user.partner_id.id)]</field>
+    </record>
+
+</odoo>

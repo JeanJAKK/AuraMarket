@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Page inscription -->
+    <template id="register_page" name="Inscription MarketHub">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5" style="max-width:500px;">
+
+                    <!-- Logo -->
+                    <div class="text-center mb-5">
+                        <h1 style="background:linear-gradient(135deg,#667eea,#764ba2);
+                                -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                                font-size:36px;font-weight:800;">
+                            MarketHub
+                        </h1>
+                        <p class="text-muted">Créez votre compte</p>
+                    </div>
+
+                    <!-- Erreurs -->
+                    <t t-if="errors">
+                        <div class="alert alert-danger">
+                            <t t-foreach="errors" t-as="error">
+                                <div>• <t t-esc="error"/></div>
+                            </t>
+                        </div>
+                    </t>
+
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-5">
+                            <form action="/register" method="post">
+                                <input type="hidden" name="csrf_token"
+                                    t-att-value="request.csrf_token()"/>
+
+                                <!-- Nom -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Nom complet</label>
+                                    <input type="text" name="name" class="form-control"
+                                        t-att-value="name or ''"
+                                        placeholder="Jean Jakk" required="required"/>
+                                </div>
+
+                                <!-- Email -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Email</label>
+                                    <input type="email" name="email" class="form-control"
+                                        t-att-value="email or ''"
+                                        placeholder="jean@exemple.com" required="required"/>
+                                </div>
+
+                                <!-- Mot de passe -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Mot de passe</label>
+                                    <input type="password" name="password" class="form-control"
+                                        placeholder="6 caractères minimum" required="required"/>
+                                </div>
+
+                                <!-- Rôle — choix obligatoire -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Je suis un(e) *</label>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <input type="radio" name="role" value="customer"
+                                                id="role_customer" class="btn-check"
+                                                t-att-checked="role != 'vendor'"/>
+                                            <label for="role_customer"
+                                                class="btn btn-outline-primary w-100 py-3">
+                                                <div style="font-size:24px;">🛍️</div>
+                                                <div class="fw-bold">Client</div>
+                                                <small class="text-muted">J'achète des produits</small>
+                                            </label>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="radio" name="role" value="vendor"
+                                                id="role_vendor" class="btn-check"
+                                                t-att-checked="role == 'vendor'"/>
+                                            <label for="role_vendor"
+                                                class="btn btn-outline-primary w-100 py-3">
+                                                <div style="font-size:24px;">🏪</div>
+                                                <div class="fw-bold">Vendeur</div>
+                                                <small class="text-muted">Je vends des produits</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit"
+                                        class="btn btn-primary btn-lg w-100 mb-3"
+                                        style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;">
+                                    Créer mon compte
+                                </button>
+
+                                <div class="text-center">
+                                    <a href="/web/login" class="text-muted small">
+                                        Déjà un compte ? Se connecter
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>

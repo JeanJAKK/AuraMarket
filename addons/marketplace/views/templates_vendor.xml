@@ -1,0 +1,751 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="vendor_list" name="Vendeurs">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5">
+                    <h1 class="mb-4">Nos vendeurs</h1>
+
+                    <!-- Barre de recherche -->
+                    <form action="/vendors/search" method="get" class="mb-5">
+                        <div class="input-group">
+                            <input type="text" name="search" class="form-control"
+                                placeholder="Rechercher un produit..."
+                                t-att-value="search or ''"/>
+                            <select name="vendor_id" class="form-select" style="max-width:200px">
+                                <option value="">Tous les vendeurs</option>
+                                <t t-foreach="vendors" t-as="v">
+                                    <option t-att-value="v.id">
+                                        <t t-esc="v.shop_name or v.name"/>
+                                    </option>
+                                </t>
+                            </select>
+                            <button type="submit" class="btn btn-primary">Rechercher</button>
+                        </div>
+                    </form>
+
+                    <!-- Liste vendeurs -->
+                    <div class="row g-4">
+                        <t t-foreach="vendors" t-as="vendor">
+                            <div class="col-md-4">
+                                <div class="card h-100 shadow-sm">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <t t-esc="vendor.shop_name or vendor.name"/>
+                                        </h5>
+                                        <p class="text-muted small">
+                                            <t t-esc="vendor.city or ''"/>
+                                        </p>
+                                        <a t-attf-href="/vendor/#{vendor.id}"
+                                        class="btn btn-outline-primary btn-sm">
+                                            Voir la boutique
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="vendor_profile" name="Profil vendeur">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <!-- Style pour la section commentaires -->
+                <style>
+                    .comment-section { display: none; }
+                    .comment-section.open { display: block; }
+                    .comment-box {
+                        max-height: 200px;
+                        overflow-y: auto;
+                        background: #f9f9f9;
+                        border-radius: 6px;
+                        padding: 10px;
+                        margin-bottom: 8px;
+                    }
+                    .comment-item {
+                        padding: 6px 0;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .comment-item:last-child { border-bottom: none; }
+                    .comment-avatar {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 50%;
+                        background: #0a66c2;
+                        color: white;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 13px;
+                        font-weight: 600;
+                        flex-shrink: 0;
+                    }
+                    .btn-comment-toggle {
+                        background: none;
+                        border: none;
+                        color: #666;
+                        font-size: 13px;
+                        font-weight: 600;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    }
+                    .btn-comment-toggle:hover { background: #f0f0f0; }
+                    .comment-input {
+                        border-radius: 20px !important;
+                        background: #f3f2ef;
+                        border: none !important;
+                        padding: 8px 16px !important;
+                        font-size: 13px;
+                    }
+                    .comment-input:focus {
+                        background: white;
+                        box-shadow: 0 0 0 1px #0a66c2 !important;
+                    }
+                    .btn-send {
+                        border-radius: 20px !important;
+                        font-size: 13px;
+                        padding: 6px 16px;
+                    }
+                </style>
+
+                <div class="container py-5">
+                    <!-- En-tête vendeur -->
+                    <div class="mb-5 d-flex align-items-center justify-content-between">
+                        <div>
+                            <h1><t t-esc="vendor.shop_name or vendor.name"/></h1>
+                            <p class="text-muted mb-1"><t t-esc="vendor.city or ''"/></p>
+                            <p class="text-muted small mb-0">
+                                <t t-esc="len(vendor.follower_ids)"/> abonné(s)
+                            </p>
+                        </div>
+
+                        <!-- Bouton follow -->
+                        <t t-if="request.env.user.id != request.env.ref('base.public_user').id">
+                            <t t-set="is_following" t-value="request.env.user.partner_id in vendor.follower_ids"/>
+                            <a t-attf-href="/vendor/#{vendor.id}/follow"
+                            t-att-class="'btn ' + ('btn-secondary' if is_following else 'btn-primary')">
+                                <t t-if="is_following">✓ Abonné</t>
+                                <t t-else="">+ Suivre</t>
+                            </a>
+                        </t>
+                        <t t-else="">
+                            <a href="/web/login" class="btn btn-outline-primary">
+                                Connectez-vous pour suivre
+                            </a>
+                        </t>
+                    </div>
+
+                    <!-- Produits -->
+                    <h3 class="mb-3">Produits</h3>
+                    <div class="row g-4">
+                        <t t-foreach="products" t-as="product">
+                            <t t-set="likes" t-value="request.env['marketplace.product.like'].sudo().search_count([('product_id','=',product.id)])"/>
+                            <t t-set="user_liked" t-value="request.env['marketplace.product.like'].sudo().search([('product_id','=',product.id),('partner_id','=',request.env.user.partner_id.id)])"/>
+                            <t t-set="comments" t-value="request.env['marketplace.product.comment'].sudo().search([('product_id','=',product.id)])"/>
+
+                            <div class="col-md-4">
+                                <div class="card h-100 shadow-sm overflow-hidden">
+                                    <!-- Image du produit -->
+                                    <t t-if="product.image_1920">
+                                        <img t-attf-src="/web/image/product.template/#{product.id}/image_1920/200x200"
+                                            t-att-alt="product.name" 
+                                            class="card-img-top" 
+                                            style="height: 250px; object-fit: cover;"/>
+                                    </t>
+                                    <t t-else="">
+                                        <div class="card-img-top bg-light d-flex align-items-center justify-content-center" 
+                                            style="height: 250px;">
+                                            <div class="text-center text-muted">
+                                                <div style="font-size: 40px;">🖼️</div>
+                                                <small>Pas d'image</small>
+                                            </div>
+                                        </div>
+                                    </t>
+
+                                    <div class="card-body d-flex flex-column">
+
+                                        <!-- Infos produit -->
+                                        <h6 class="card-title fw-bold"><t t-esc="product.name"/></h6>
+                                        <p class="fw-bold text-primary mb-3"><t t-esc="product.list_price"/> FCFA</p>
+
+                                            <!-- Bouton panier -->
+                                            <a t-attf-href="/marketplace/cart/add/#{product.id}"
+                                            class="btn btn-success btn-sm w-100 mb-2">
+                                                + Ajouter au panier
+                                            </a>
+
+                                        <!-- Barre d'actions : like + commentaire -->
+                                        <div class="d-flex align-items-center gap-2 border-top border-bottom py-2 mb-2">
+                                            <!-- Like -->
+                                            <a t-attf-href="/product/#{product.id}/like"
+                                            t-att-class="'btn btn-sm ' + ('btn-danger' if user_liked else 'btn-outline-danger')">
+                                                ♥ <t t-esc="likes"/>
+                                            </a>
+
+                                            <!-- Bouton commentaire style LinkedIn -->
+                                            <button class="btn-comment-toggle"
+                                                    t-attf-onclick="toggleComments('comments-#{product.id}')">
+                                                💬 <t t-esc="len(comments)"/> commentaire(s)
+                                            </button>
+                                        </div>
+
+                                        <!-- Section commentaires (cachée par défaut) -->
+                                        <div t-attf-id="comments-#{product.id}" class="comment-section mt-1">
+
+                                            <!-- Liste commentaires scrollable -->
+                                            <div class="comment-box">
+                                                <t t-if="not comments">
+                                                    <p class="text-muted small mb-0 text-center">
+                                                        Soyez le premier à commenter.
+                                                    </p>
+                                                </t>
+                                                <t t-foreach="comments" t-as="comment">
+                                                    <div class="comment-item d-flex gap-2">
+                                                        <div class="comment-avatar">
+                                                            <t t-esc="(comment.partner_id.name or 'U')[0].upper()"/>
+                                                        </div>
+                                                        <div>
+                                                            <div class="fw-bold" style="font-size:12px;">
+                                                                <t t-esc="comment.partner_id.name"/>
+                                                            </div>
+                                                            <div style="font-size:13px;">
+                                                                <t t-esc="comment.content"/>
+                                                            </div>
+                                                            <div class="text-muted" style="font-size:11px;">
+                                                                <t t-esc="comment.date_comment"/>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </t>
+                                            </div>
+
+                                            <!-- Champ ajouter un commentaire -->
+                                            <t t-if="request.env.user.id != request.env.ref('base.public_user').id">
+                                                <form t-attf-action="/product/#{product.id}/comment"
+                                                    method="post" class="d-flex gap-2 align-items-center">
+                                                    <input type="hidden" name="csrf_token"
+                                                        t-att-value="request.csrf_token()"/>
+                                                    <div class="comment-avatar" style="background:#6c757d;">
+                                                        <t t-esc="(request.env.user.name or 'U')[0].upper()"/>
+                                                    </div>
+                                                    <input type="text" name="content"
+                                                        class="form-control comment-input"
+                                                        placeholder="Ajouter un commentaire..."
+                                                        autocomplete="off"/>
+                                                    <button type="submit" class="btn btn-primary btn-send">
+                                                        Envoyer
+                                                    </button>
+                                                </form>
+                                            </t>
+                                            <t t-else="">
+                                                <p class="text-muted small text-center mt-2">
+                                                    <a href="/web/login">Connectez-vous</a> pour commenter.
+                                                </p>
+                                            </t>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-if="not products">
+                            <p class="text-muted">Aucun produit pour ce vendeur.</p>
+                        </t>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JS pour toggle commentaires -->
+            <script>
+                function toggleComments(id) {
+                    var section = document.getElementById(id);
+                    if (section) {
+                        section.classList.toggle('open');
+                    }
+                }
+            </script>
+        </t>
+    </template>
+
+    <!-- Page d'accueil marketplace -->
+    <template id="marketplace_home" name="Marketplace Accueil">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+
+                <!-- Hero -->
+                <section style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 80px 0;">
+                    <div class="container text-center">
+                        <h1 class="display-4 fw-bold mb-3">MarketHub</h1>
+                        <p class="lead mb-4">Découvrez des vendeurs uniques et leurs produits exclusifs</p>
+                        <div class="d-flex justify-content-center gap-4 mb-5">
+                            <div class="text-center">
+                                <div class="display-6 fw-bold"><t t-esc="total_vendors"/></div>
+                                <small>Vendeurs</small>
+                            </div>
+                            <div class="text-center">
+                                <div class="display-6 fw-bold"><t t-esc="total_products"/></div>
+                                <small>Produits</small>
+                            </div>
+                        </div>
+                        <a href="/vendors" class="btn btn-light btn-lg me-3">Voir les vendeurs</a>
+                        <a href="/vendors/search" class="btn btn-outline-light btn-lg">Rechercher</a>
+                    </div>
+                </section>
+
+                <!-- Vendeurs en vedette -->
+                <section class="container py-5">
+                    <h2 class="mb-4">Vendeurs en vedette</h2>
+                    <div class="row g-4">
+                        <t t-foreach="vendors" t-as="vendor">
+                            <div class="col-md-4">
+                                <div class="card h-100 shadow-sm border-0"
+                                    style="transition: transform 0.2s;"
+                                    onmouseover="this.style.transform='translateY(-4px)'"
+                                    onmouseout="this.style.transform='translateY(0)'">
+                                    <div class="card-body p-4">
+                                        <!-- Avatar vendeur -->
+                                        <div class="d-flex align-items-center gap-3 mb-3">
+                                            <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">
+                                                <t t-esc="(vendor.shop_name or vendor.name or 'V')[0].upper()"/>
+                                            </div>
+                                            <div>
+                                                <h5 class="mb-0 fw-bold">
+                                                    <t t-esc="vendor.shop_name or vendor.name"/>
+                                                </h5>
+                                                <small class="text-muted">
+                                                    <t t-esc="vendor.city or ''"/>
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <p class="text-muted small mb-3">
+                                             <t t-esc="len(vendor.follower_ids)"/> abonné(s)
+                                        </p>
+                                        <a t-attf-href="/vendor/#{vendor.id}"
+                                        class="btn btn-outline-primary btn-sm w-100">
+                                            Voir la boutique
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </section>
+
+            </div>
+        </t>
+    </template>
+
+
+
+    <template id="vendor_dashboard" name="Dashboard Vendeur">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5">
+
+                    <!-- En-tête -->
+                    <div class="d-flex align-items-center justify-content-between mb-5">
+                        <div>
+                            <h1 class="fw-bold mb-1">Mon dashboard</h1>
+                            <p class="text-muted mb-0">
+                                <t t-esc="vendor.shop_name or vendor.name"/>
+                            </p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="/my/vendor/product/new" class="btn btn-primary">
+                                + Ajouter un produit
+                            </a>
+                            <a href="/my/vendor/live/new" class="btn btn-danger fw-bold">
+                                &#9679; Lancer un live
+                            </a>
+                            <a t-attf-href="/vendor/#{vendor.id}" class="btn btn-outline-secondary">
+                                Voir ma boutique
+                            </a>
+                            <a href="/my/notifications" class="btn btn-outline-primary position-relative">
+                                🔔 Notifications
+                                <t t-set="unread_count" t-value="request.env['marketplace.notification'].sudo().search_count([('user_id','=',request.env.user.id),('is_read','=',False)])"/>
+                                <t t-if="unread_count > 0">
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                        <t t-esc="unread_count"/>
+                                    </span>
+                                </t>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Stats globales — ligne 1 -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <div class="card border-0 shadow-sm text-center p-4"
+                                style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;">
+                                <div class="display-6 fw-bold"><t t-esc="total_orders"/></div>
+                                <div class="small">Commandes</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-0 shadow-sm text-center p-4"
+                                style="background:linear-gradient(135deg,#11998e,#38ef7d);color:white;">
+                                <div class="display-6 fw-bold"><t t-esc="total_paid"/> FCFA</div>
+                                <div class="small">Revenus perçus</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-0 shadow-sm text-center p-4"
+                                style="background:linear-gradient(135deg,#f093fb,#f5576c);color:white;">
+                                <div class="display-6 fw-bold"><t t-esc="total_likes"/></div>
+                                <div class="small">Likes</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-0 shadow-sm text-center p-4"
+                                style="background:linear-gradient(135deg,#4facfe,#00f2fe);color:white;">
+                                <div class="display-6 fw-bold"><t t-esc="total_followers"/></div>
+                                <div class="small">Abonnés</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats financières — ligne 2 -->
+                    <div class="row g-3 mb-5">
+                        <div class="col-md-6">
+                            <div class="card border-0 shadow-sm p-4">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="text-muted small">Chiffre d'affaires brut</div>
+                                        <div class="fs-4 fw-bold text-primary">
+                                            <t t-esc="total_revenue"/> FCFA
+                                        </div>
+                                    </div>
+                                    <div style="font-size:36px;">💰</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-0 shadow-sm p-4">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="text-muted small">Commissions plateforme</div>
+                                        <div class="fs-4 fw-bold text-danger">
+                                            - <t t-esc="total_commission"/> FCFA
+                                        </div>
+                                    </div>
+                                    <div style="font-size:36px;">📊</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mes lives (Sprint 4 : historique + stats post-live) -->
+                    <h3 class="mb-4">Mes lives</h3>
+                    <t t-if="not vendor_lives">
+                        <div class="text-center py-5 text-muted">
+                            <div style="font-size:48px;">📺</div>
+                            <p>Aucun live pour le moment.</p>
+                            <a href="/my/vendor/live/new" class="btn btn-outline-primary">
+                                Créer mon premier live
+                            </a>
+                        </div>
+                    </t>
+                    <t t-if="vendor_lives">
+                        <div class="card border-0 shadow-sm mb-5">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Titre</th>
+                                            <th>Statut</th>
+                                            <th>Début</th>
+                                            <th>Likes</th>
+                                            <th>Commentaires</th>
+                                            <th>Achats</th>
+                                            <th>Revenus</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="vendor_lives" t-as="live">
+                                            <tr>
+                                                <td class="fw-bold">
+                                                    <t t-esc="live.name"/>
+                                                </td>
+                                                <td>
+                                                    <span t-att-class="'badge ' + ('bg-danger' if live.status == 'live' else 'bg-secondary' if live.status == 'scheduled' else 'bg-dark')">
+                                                        <t t-if="live.status == 'live'">&#9679; EN DIRECT</t>
+                                                        <t t-elif="live.status == 'scheduled'">Programme</t>
+                                                        <t t-else="">Replay</t>
+                                                    </span>
+                                                </td>
+                                                <td class="text-muted small">
+                                                    <t t-esc="live.start_time or ''"/>
+                                                </td>
+                                                <td>
+                                                    ♥ <t t-esc="live.like_count"/>
+                                                </td>
+                                                <td>
+                                                    💬 <t t-esc="live.comment_count"/>
+                                                </td>
+                                                <td>
+                                                    🛒 <t t-esc="live.order_count"/>
+                                                </td>
+                                                <td class="fw-bold text-success">
+                                                    <t t-esc="live.revenue_total"/> FCFA
+                                                </td>
+                                                <td class="text-end">
+                                                    <a t-attf-href="#{('/my/vendor/live/%s/dashboard' % live.id) if live.status != 'ended' else ('/live/%s' % live.id)}"
+                                                        class="btn btn-sm btn-outline-primary">
+                                                        Voir
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Commandes reçues -->
+                    <h3 class="mb-4">Commandes reçues</h3>
+                    <t t-if="not mp_orders">
+                        <div class="text-center py-5 text-muted">
+                            <div style="font-size:48px;">📦</div>
+                            <p>Aucune commande pour le moment.</p>
+                        </div>
+                    </t>
+                    <t t-if="mp_orders">
+                        <div class="card border-0 shadow-sm mb-5">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Référence</th>
+                                            <th>Client</th>
+                                            <th>Date</th>
+                                            <th>Produits</th>
+                                            <th>Total</th>
+                                            <th>Commission</th>
+                                            <th>Vous recevez</th>
+                                            <th>Statut</th>
+                                            <th>Paiement</th>
+                                            <th>Messages</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="mp_orders" t-as="order">
+                                            <tr>
+                                                <td class="fw-bold">
+                                                    <t t-esc="order.name"/>
+                                                </td>
+                                                <td>
+                                                    <t t-esc="order.customer_id.name"/>
+                                                </td>
+                                                <td class="text-muted small">
+                                                    <t t-esc="order.date_order"/>
+                                                </td>
+                                                <td>
+                                                    <t t-foreach="order.line_ids" t-as="line">
+                                                        <div class="small">
+                                                            <t t-esc="line.product_id.name"/>
+                                                            × <t t-esc="line.quantity"/>
+                                                        </div>
+                                                    </t>
+                                                </td>
+                                                <td class="fw-bold">
+                                                    <t t-esc="order.amount_total"/> FCFA
+                                                </td>
+                                                <td class="text-danger small">
+                                                    - <t t-esc="order.amount_commission"/> FCFA
+                                                </td>
+                                                <td class="text-success fw-bold">
+                                                    <t t-esc="order.amount_vendor"/> FCFA
+                                                </td>
+                                                <td>
+                                                    <span t-att-class="'badge ' + ('bg-success' if order.state == 'paid' else 'bg-warning text-dark' if order.state == 'confirmed' else 'bg-secondary')">
+                                                        <t t-esc="order.state"/>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span t-att-class="'badge ' + ('bg-success' if order.payment_state == 'paid' else 'bg-warning text-dark')">
+                                                        <t t-esc="order.payment_state"/>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <a t-attf-href="/marketplace/order/#{order.id}/messages"
+                                                    class="btn btn-sm btn-outline-primary">
+                                                        💬
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Mes produits -->
+                    <h3 class="mb-4">Mes produits</h3>
+                    <div class="row g-4">
+                        <t t-foreach="product_stats" t-as="stat">
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body p-4">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="d-flex gap-3 align-items-center">
+                                                <t t-if="stat['product'].image_1920">
+                                                    <img t-attf-src="/web/image/product.template/#{stat['product'].id}/image_1920/60x60"
+                                                        class="rounded" width="60" height="60"
+                                                        style="object-fit:cover;"/>
+                                                </t>
+                                                <div>
+                                                    <h5 class="fw-bold mb-1">
+                                                        <t t-esc="stat['product'].name"/>
+                                                    </h5>
+                                                    <p class="text-primary fw-bold mb-0">
+                                                        <t t-esc="stat['product'].list_price"/> FCFA
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-3 text-center align-items-start">
+                                                <div>
+                                                    <div class="fw-bold text-danger">♥ <t t-esc="stat['likes']"/></div>
+                                                    <small class="text-muted">likes</small>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold text-primary">💬 <t t-esc="stat['comments']"/></div>
+                                                    <small class="text-muted">comments</small>
+                                                </div>
+                                                <!-- Bouton suppression discret -->
+                                                <a t-attf-href="/my/vendor/product/#{stat['product'].id}/delete"
+                                                class="text-muted"
+                                                style="font-size:11px; opacity:0.4; text-decoration:none;"
+                                                onmouseover="this.style.opacity='1'; this.style.color='#dc3545';"
+                                                onmouseout="this.style.opacity='0.4'; this.style.color='';"
+                                                onclick="return confirm('Supprimer ce produit ?')">
+                                                    ✕
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-if="not product_stats">
+                            <div class="col-12 text-center py-4 text-muted">
+                                <p>Aucun produit. <a href="/my/vendor/product/new">Ajouter un produit</a></p>
+                            </div>
+                        </t>
+                    </div>
+
+                </div>
+            </div>
+        </t>
+    </template>
+
+
+
+
+    <!-- Formulaire ajout produit -->
+    <template id="vendor_product_form" name="Ajouter un produit">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5" style="max-width: 600px;">
+
+                    <!-- Breadcrumb -->
+                    <nav aria-label="breadcrumb" class="mb-4">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="/my/vendor/dashboard">Mon dashboard</a>
+                            </li>
+                            <li class="breadcrumb-item active">Ajouter un produit</li>
+                        </ol>
+                    </nav>
+
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-5">
+                            <h2 class="fw-bold mb-4">Ajouter un produit</h2>
+
+                            <form action="/my/vendor/product/new" method="post" enctype="multipart/form-data">
+                                <input type="hidden" name="csrf_token"
+                                    t-att-value="request.csrf_token()"/>
+
+                                <!-- Nom -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Nom du produit *</label>
+                                    <input type="text" name="name" class="form-control form-control-lg"
+                                        placeholder="Ex: Sac en cuir artisanal"
+                                        required="required"/>
+                                </div>
+
+                                <!-- Prix -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Prix (FCFA) *</label>
+                                    <div class="input-group">
+                                        <input type="number" name="list_price"
+                                            class="form-control form-control-lg"
+                                            placeholder="0.00" step="0.01" min="0"
+                                            required="required"/>
+                                        <span class="input-group-text">FCFA</span>
+                                    </div>
+                                </div>
+
+                                <!-- Description -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Description</label>
+                                    <textarea name="description" class="form-control"
+                                            rows="4"
+                                            placeholder="Décrivez votre produit..."></textarea>
+                                </div>
+
+                                <!-- Image du produit -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">Image du produit</label>
+                                    <input type="file" name="image" class="form-control form-control-lg"
+                                        accept="image/*" id="product-image"/>
+                                    <small class="text-muted d-block mt-2">Format acceptés: JPG, PNG, GIF (Max: 10MB)</small>
+                                    <!-- Aperçu de l'image -->
+                                    <div id="image-preview" class="mt-3" style="display: none;">
+                                        <img id="preview-img" src="" alt="Aperçu" style="max-width: 200px; border-radius: 6px;"/>
+                                    </div>
+                                </div>
+
+                                <!-- Boutons -->
+                                <div class="d-flex gap-3">
+                                    <button type="submit" class="btn btn-primary btn-lg flex-fill">
+                                        Publier le produit
+                                    </button>
+                                    <a href="/my/vendor/dashboard"
+                                    class="btn btn-outline-secondary btn-lg">
+                                        Annuler
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Script pour aperçu image -->
+            <script>
+                document.getElementById('product-image').addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            const preview = document.getElementById('preview-img');
+                            preview.src = event.target.result;
+                            document.getElementById('image-preview').style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            </script>
+        </t>
+    </template>
+
+</odoo>

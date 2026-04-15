@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Résultats de recherche -->
+    <template id="search_results" name="Résultats recherche">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container py-5">
+                    <h1 class="mb-2">Résultats de recherche</h1>
+                    <p class="text-muted mb-4">
+                        <t t-if="search">Recherche : "<t t-esc="search"/>" · </t>
+                        <t t-esc="len(products)"/> produit(s) trouvé(s)
+                    </p>
+
+                    <!-- Barre de recherche -->
+                    <form action="/vendors/search" method="get" class="mb-5">
+                        <div class="input-group">
+                            <input type="text" name="search" class="form-control"
+                                placeholder="Rechercher un produit..."
+                                t-att-value="search or ''"/>
+                            <select name="vendor_id" class="form-select" style="max-width:200px">
+                                <option value="">Tous les vendeurs</option>
+                                <t t-foreach="vendors" t-as="v">
+                                    <option t-att-value="v.id"
+                                            t-att-selected="v.id == selected_vendor_id">
+                                        <t t-esc="v.shop_name or v.name"/>
+                                    </option>
+                                </t>
+                            </select>
+                            <button type="submit" class="btn btn-primary">Rechercher</button>
+                        </div>
+                    </form>
+
+                    <!-- Résultats -->
+                    <div class="row g-4">
+                        <t t-foreach="products" t-as="product">
+                            <div class="col-md-3">
+                                <a t-attf-href="/vendor/#{product.vendor_id.id}"
+                                style="text-decoration:none;color:inherit;">
+                                    <div class="card h-100 shadow-sm" style="transition:transform 0.2s;"
+                                        onmouseover="this.style.transform='translateY(-3px)'"
+                                        onmouseout="this.style.transform='translateY(0)'">
+                                        <t t-if="product.image_1920">
+                                            <img t-attf-src="/web/image/product.template/#{product.id}/image_1920/300x200"
+                                                class="card-img-top" style="height:160px;object-fit:cover;"/>
+                                        </t>
+                                        <div class="card-body">
+                                            <h6 class="card-title fw-bold mb-1">
+                                                <t t-esc="product.name"/>
+                                            </h6>
+                                            <p class="text-muted small mb-2">
+                                                <t t-esc="product.vendor_id.shop_name or product.vendor_id.name"/>
+                                            </p>
+                                            <div class="fw-bold text-primary">
+                                                <t t-esc="product.list_price"/> FCFA
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        </t>
+
+                        <t t-if="not products">
+                            <div class="col-12">
+                                <p class="text-muted">Aucun résultat.</p>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>
