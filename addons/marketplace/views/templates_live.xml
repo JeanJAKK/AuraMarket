@@ -136,8 +136,15 @@
                                 </div>
                             </div>
                             <!-- Spectateurs -->
-                            <div class="badge bg-dark bg-opacity-75 d-flex align-items-center gap-1" style="font-size:13px;">
-                                &#128100; <span id="viewer-count"><t t-esc="live.viewer_count"/></span>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="badge bg-dark bg-opacity-75 d-flex align-items-center gap-1" style="font-size:13px;">
+                                    &#128100; <span id="viewer-count"><t t-esc="live.viewer_count"/></span>
+                                </div>
+                                <t t-if="not is_broadcaster">
+                                    <a href="/live" class="btn btn-sm btn-outline-light">
+                                        Quitter le live
+                                    </a>
+                                </t>
                             </div>
                         </div>
 

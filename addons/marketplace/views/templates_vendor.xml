@@ -495,7 +495,7 @@
                                                     <t t-esc="live.revenue_total"/> FCFA
                                                 </td>
                                                 <td class="text-end">
-                                                    <a t-attf-href="#{('/my/vendor/live/%s/dashboard' % live.id) if live.status != 'ended' else ('/live/%s' % live.id)}"
+                                                    <a t-attf-href="/my/vendor/live/#{live.id}/dashboard"
                                                         class="btn btn-sm btn-outline-primary">
                                                         Voir
                                                     </a>
