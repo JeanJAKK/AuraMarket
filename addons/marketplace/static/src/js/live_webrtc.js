@@ -220,9 +220,15 @@
 
     var unmuteBtn = $("marketplace-live-unmute");
     var unmuteListenerBound = false;
+    var unmuteGlobalListenerBound = false;
+    var viewerWantsSound = false;
 
     var startBtn = $("marketplace-webrtc-start");
     var stopBtn = $("marketplace-webrtc-stop");
+
+    var liveStartBtn = $("marketplace-live-start");
+    var liveEndBtn = $("marketplace-live-end");
+    var vendorFeaturedEl = $("vendor-featured-products");
 
     var csrfToken = (configEl.dataset.csrfToken || "").trim();
 
@@ -236,6 +242,9 @@
     var commentsBottomEl = $("comments-bottom");
     var commentFormEl = $("comment-form");
     var commentInputEl = $("comment-input");
+
+    var featuredSelectEl = $("live-featured-select");
+    var featuredSelectListenerBound = false;
 
     var lastCommentId = 0;
     var lastReactionId = safeParseInt(configEl.dataset.lastReactionId, 0);
@@ -287,6 +296,21 @@
         } else {
           statusBadgeEl.textContent = status;
         }
+      }
+
+      syncBroadcasterActionButtons(status);
+    }
+
+    function syncBroadcasterActionButtons(status) {
+      if (!isBroadcaster) return;
+      status = status ? String(status).trim() : "";
+
+      if (liveStartBtn) {
+        liveStartBtn.style.display =
+          status === "scheduled" ? "inline-block" : "none";
+      }
+      if (liveEndBtn) {
+        liveEndBtn.style.display = status === "live" ? "inline-block" : "none";
       }
     }
 
@@ -577,6 +601,146 @@
       }
     }
 
+    function syncVendorFeaturedButtons() {
+      if (!vendorFeaturedEl) return;
+      var buttons = vendorFeaturedEl.querySelectorAll(
+        ".vendor-featured-toggle[data-product-id]",
+      );
+      for (var i = 0; i < buttons.length; i++) {
+        var btn = buttons[i];
+        var pid = safeParseInt(btn.getAttribute("data-product-id"), 0);
+        if (!pid) continue;
+        var isFeaturedNow = !!featuredProductsById[String(pid)];
+
+        btn.setAttribute("data-featured", isFeaturedNow ? "1" : "0");
+        btn.textContent = isFeaturedNow ? "Retirer" : "Vedette";
+
+        btn.classList.remove("btn-warning");
+        btn.classList.remove("btn-outline-secondary");
+        btn.classList.add(
+          isFeaturedNow ? "btn-outline-secondary" : "btn-warning",
+        );
+      }
+    }
+
+    function setupVendorFeaturedActions() {
+      if (!vendorFeaturedEl) return;
+      if (!isBroadcaster) return;
+      if (!window.fetch) return;
+
+      vendorFeaturedEl.addEventListener("click", async function (ev) {
+        var target = ev.target;
+        var btn =
+          target && target.closest
+            ? target.closest(".vendor-featured-toggle")
+            : null;
+        if (!btn) return;
+
+        ev.preventDefault();
+
+        var pid = safeParseInt(btn.getAttribute("data-product-id"), 0);
+        if (!pid) return;
+
+        var currentlyFeatured =
+          String(btn.getAttribute("data-featured") || "0") === "1";
+        var nextFeatured = !currentlyFeatured;
+
+        var priceInput = vendorFeaturedEl.querySelector(
+          ".vendor-featured-special-price[data-product-id='" + pid + "']",
+        );
+        var specialPrice = priceInput ? (priceInput.value || "").trim() : "";
+
+        btn.disabled = true;
+        try {
+          var res = await postJson(
+            "/my/vendor/live/" + liveId + "/feature/json",
+            {
+              product_id: pid,
+              special_price: specialPrice,
+              featured: nextFeatured,
+              csrf_token: csrfToken,
+            },
+          );
+
+          if (!res || res.status !== "ok") {
+            throw new Error("feature_failed");
+          }
+
+          // Immediate UI feedback.
+          btn.setAttribute("data-featured", nextFeatured ? "1" : "0");
+          btn.textContent = nextFeatured ? "Retirer" : "Vedette";
+          btn.classList.remove("btn-warning");
+          btn.classList.remove("btn-outline-secondary");
+          btn.classList.add(
+            nextFeatured ? "btn-outline-secondary" : "btn-warning",
+          );
+
+          // Refresh banner/list.
+          refreshFeatured();
+        } catch (e) {
+          // ignore
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    function setupBroadcasterLiveActions() {
+      if (!isBroadcaster) return;
+      if (!window.fetch) return;
+
+      if (liveStartBtn) {
+        liveStartBtn.addEventListener("click", async function () {
+          liveStartBtn.disabled = true;
+          try {
+            var res = await postJson(
+              "/my/vendor/live/" + liveId + "/start/json",
+              {
+                csrf_token: csrfToken,
+              },
+            );
+            if (!res || res.status !== "ok" || !res.live) {
+              throw new Error("start_live_failed");
+            }
+            liveStatus = String(res.live.status || "live");
+            updateStatusBadge(liveStatus);
+            updatePlaceholderForStatus(liveStatus);
+          } catch (e) {
+            // ignore
+          } finally {
+            liveStartBtn.disabled = false;
+          }
+        });
+      }
+
+      if (liveEndBtn) {
+        liveEndBtn.addEventListener("click", async function () {
+          liveEndBtn.disabled = true;
+          try {
+            var res = await postJson(
+              "/my/vendor/live/" + liveId + "/end/json",
+              {
+                csrf_token: csrfToken,
+              },
+            );
+            if (!res || res.status !== "ok" || !res.live) {
+              throw new Error("end_live_failed");
+            }
+            liveStatus = String(res.live.status || "ended");
+            updateStatusBadge(liveStatus);
+            updatePlaceholderForStatus(liveStatus);
+            stopBroadcaster();
+          } catch (e) {
+            // ignore
+          } finally {
+            liveEndBtn.disabled = false;
+          }
+        });
+      }
+
+      syncBroadcasterActionButtons(liveStatus);
+    }
+
     function startUpdatesPolling() {
       if (updatesTimer) return;
       updatesTimer = setInterval(pollLiveUpdates, 1000);
@@ -675,8 +839,13 @@
 
     function unmuteAndPlay() {
       if (!videoEl) return;
+
+      viewerWantsSound = true;
+
       try {
         videoEl.muted = false;
+        videoEl.defaultMuted = false;
+        videoEl.volume = 1.0;
         videoEl.removeAttribute("muted");
       } catch (e) {
         // ignore
@@ -700,7 +869,6 @@
             // ignore
           }
           showUnmuteButton();
-          videoEl.play().catch(function () {});
         });
       } else {
         hideUnmuteButton();
@@ -864,13 +1032,42 @@
         var stream = ev.streams && ev.streams[0] ? ev.streams[0] : null;
         if (stream) {
           videoEl.srcObject = stream;
-          // allow autoplay; user can click video to unmute
-          videoEl.muted = true;
+
+          // allow autoplay; user can click anywhere to enable audio
+          videoEl.muted = !viewerWantsSound;
+          try {
+            videoEl.volume = 1.0;
+          } catch (e) {
+            // ignore
+          }
+
+          if (viewerWantsSound) {
+            try {
+              videoEl.defaultMuted = false;
+              videoEl.removeAttribute("muted");
+            } catch (e2) {
+              // ignore
+            }
+            hideUnmuteButton();
+          } else {
+            // Make it obvious how to enable audio.
+            showUnmuteButton();
+
+            // Autoplay policies require a user gesture: unmute on the next click.
+            if (!unmuteGlobalListenerBound) {
+              document.addEventListener(
+                "click",
+                function () {
+                  unmuteAndPlay();
+                },
+                { once: true },
+              );
+              unmuteGlobalListenerBound = true;
+            }
+          }
+
           showVideo(videoEl, placeholderEl);
           videoEl.play().catch(function () {});
-
-          // Make it obvious how to enable audio.
-          showUnmuteButton();
         }
       };
 
@@ -926,6 +1123,34 @@
 
       try {
         localStream = await getLocalStreamWithFallback();
+
+        // Ensure audio is present when possible (some browsers/permissions fall back to video-only).
+        try {
+          var hasAudio =
+            localStream &&
+            localStream.getAudioTracks &&
+            localStream.getAudioTracks().length > 0;
+
+          if (!hasAudio) {
+            var audioOnly = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false,
+            });
+            var audioTrack =
+              audioOnly &&
+              audioOnly.getAudioTracks &&
+              audioOnly.getAudioTracks()[0]
+                ? audioOnly.getAudioTracks()[0]
+                : null;
+            if (audioTrack && localStream && localStream.addTrack) {
+              localStream.addTrack(audioTrack);
+            }
+          }
+        } catch (eAudio) {
+          showOrderNotification(
+            "Micro désactivé — autorisez le micro pour avoir l'audio",
+          );
+        }
       } catch (e) {
         console.error("[marketplace.live] getUserMedia failed", e);
         showPlaceholderMessage(placeholderEl, humanizeGetUserMediaError(e));
@@ -989,62 +1214,170 @@
     var lastFeaturedName = null;
     var lastSpecial = null;
     var lastList = null;
+    var lastFeaturedPayloadKey = null;
+    var selectedFeaturedId = null;
+    var featuredProductsById = {};
+
+    function buildFeaturedProductsKey(products) {
+      if (!products || !products.length) return "";
+      var parts = [];
+      for (var i = 0; i < products.length; i++) {
+        var p = products[i] || {};
+        parts.push(
+          String(p.id || "") +
+            ":" +
+            String(Number(p.special_price || 0)) +
+            ":" +
+            String(Number(p.list_price || 0)),
+        );
+      }
+      return parts.join("|");
+    }
+
+    function setFeaturedProductsMap(products) {
+      var map = {};
+      for (var i = 0; i < products.length; i++) {
+        var p = products[i] || {};
+        if (!p.id) continue;
+        map[String(p.id)] = p;
+      }
+      featuredProductsById = map;
+
+      // Keep vendor UI in sync (broadcaster only).
+      if (isBroadcaster) {
+        syncVendorFeaturedButtons();
+      }
+    }
+
+    function renderFeaturedSelect(products, activeId) {
+      if (!featuredSelectEl) return;
+
+      if (products.length > 1) {
+        featuredSelectEl.style.display = "block";
+
+        while (featuredSelectEl.firstChild) {
+          featuredSelectEl.removeChild(featuredSelectEl.firstChild);
+        }
+
+        for (var i = 0; i < products.length; i++) {
+          var p = products[i] || {};
+          if (!p.id) continue;
+
+          var opt = document.createElement("option");
+          opt.value = String(p.id);
+          opt.textContent = String(p.name || "");
+          featuredSelectEl.appendChild(opt);
+        }
+      } else {
+        featuredSelectEl.style.display = "none";
+      }
+
+      try {
+        featuredSelectEl.value = String(activeId || "");
+      } catch (e) {
+        // ignore
+      }
+
+      if (!featuredSelectListenerBound) {
+        featuredSelectEl.addEventListener("change", function () {
+          var newId = safeParseInt(featuredSelectEl.value, 0);
+          if (!newId) return;
+          selectedFeaturedId = newId;
+          applyFeaturedProduct(featuredProductsById[String(newId)]);
+        });
+        featuredSelectListenerBound = true;
+      }
+    }
+
+    function applyFeaturedProduct(product) {
+      var banner = $("live-featured-banner");
+      var nameEl = $("live-featured-name");
+      var priceEl = $("live-featured-price");
+      var buyEl = $("live-featured-buy");
+
+      if (!banner || !nameEl || !priceEl) return;
+      if (!product || !product.id) return;
+
+      var pid = product.id;
+      var sp = Number(product.special_price || 0);
+      var lp = Number(product.list_price || 0);
+
+      lastFeaturedId = pid;
+      lastFeaturedName = product.name || "";
+      lastSpecial = sp;
+      lastList = lp;
+
+      banner.style.display = "flex";
+      nameEl.textContent = product.name || "";
+
+      // Price rendering (safe DOM)
+      while (priceEl.firstChild) priceEl.removeChild(priceEl.firstChild);
+
+      if (sp && sp > 0) {
+        priceEl.appendChild(document.createTextNode(sp + " FCFA "));
+
+        var strike = document.createElement("span");
+        strike.id = "live-featured-strike";
+        strike.className = "text-muted text-decoration-line-through small ms-2";
+        strike.textContent = lp + " FCFA";
+        priceEl.appendChild(strike);
+      } else {
+        priceEl.textContent = lp + " FCFA";
+      }
+
+      if (buyEl && pid) {
+        buyEl.setAttribute("href", "/marketplace/cart/add/" + pid);
+      }
+    }
 
     async function refreshFeatured() {
       try {
         var data = await postJson("/live/" + liveId + "/featured", {});
         var banner = $("live-featured-banner");
-        var nameEl = $("live-featured-name");
-        var priceEl = $("live-featured-price");
-        var buyEl = $("live-featured-buy");
-
-        if (!banner || !nameEl || !priceEl) return;
+        if (!banner) return;
 
         if (!data || !data.featured) {
           banner.style.display = "none";
           lastFeaturedId = null;
+          lastFeaturedName = null;
           lastSpecial = null;
           lastList = null;
+          lastFeaturedPayloadKey = null;
+          selectedFeaturedId = null;
+          featuredProductsById = {};
           return;
         }
 
-        var product = data.product || {};
-        var pid = product.id || null;
-        var sp = Number(product.special_price || 0);
-        var lp = Number(product.list_price || 0);
+        var products = [];
+        if (data.products && Array.isArray(data.products)) {
+          products = data.products;
+        } else if (data.product) {
+          products = [data.product];
+        }
 
-        if (pid === lastFeaturedId && sp === lastSpecial && lp === lastList) {
+        if (!products.length) {
+          banner.style.display = "none";
+          lastFeaturedPayloadKey = null;
           return;
         }
 
-        lastFeaturedId = pid;
-        lastFeaturedName = product.name || "";
-        lastSpecial = sp;
-        lastList = lp;
+        var payloadKey = buildFeaturedProductsKey(products);
+        setFeaturedProductsMap(products);
 
-        banner.style.display = "flex";
-
-        nameEl.textContent = product.name || "";
-
-        // Price rendering (safe DOM)
-        while (priceEl.firstChild) priceEl.removeChild(priceEl.firstChild);
-
-        if (sp && sp > 0) {
-          priceEl.appendChild(document.createTextNode(sp + " FCFA "));
-
-          var strike = document.createElement("span");
-          strike.id = "live-featured-strike";
-          strike.className =
-            "text-muted text-decoration-line-through small ms-2";
-          strike.textContent = lp + " FCFA";
-          priceEl.appendChild(strike);
-        } else {
-          priceEl.textContent = lp + " FCFA";
+        var activeId = selectedFeaturedId || lastFeaturedId;
+        if (!activeId || !featuredProductsById[String(activeId)]) {
+          activeId = products[0].id;
         }
 
-        if (buyEl && pid) {
-          buyEl.setAttribute("href", "/marketplace/cart/add/" + pid);
+        // Avoid rebuilding the dropdown when nothing changed.
+        if (payloadKey === lastFeaturedPayloadKey) {
+          return;
         }
+
+        lastFeaturedPayloadKey = payloadKey;
+        selectedFeaturedId = activeId;
+        renderFeaturedSelect(products, activeId);
+        applyFeaturedProduct(featuredProductsById[String(activeId)]);
       } catch (e) {
         // ignore
       }
@@ -1198,6 +1531,9 @@
     setInterval(refreshFeatured, 3000);
 
     setupBuyModal();
+
+    setupVendorFeaturedActions();
+    setupBroadcasterLiveActions();
 
     setupCommentFormAjax();
     setupReactionOptimisticCounter();

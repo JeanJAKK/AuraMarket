@@ -86,9 +86,26 @@ class MarketplaceLiveController(http.Controller):
         comments = request.env['marketplace.live.comment'].sudo().search(
             [('live_id', '=', live_id)], order='create_date asc', limit=50
         )
-        featured = request.env['marketplace.live.product'].sudo().search(
-            [('live_id', '=', live_id), ('is_featured', '=', True)], limit=1
-        )
+        featured_products = request.env['marketplace.live.product'].sudo().search([
+            ('live_id', '=', live_id),
+            ('is_featured', '=', True),
+        ], order='sequence asc, id desc')
+
+        featured = featured_products[:1]
+
+        vendor_products = request.env['product.template']
+        is_broadcaster = False
+        try:
+            public_user = request.env.ref('base.public_user')
+            if request.env.user.id != public_user.id and request.env.user.partner_id.id == live.vendor_id.id:
+                is_broadcaster = True
+        except Exception:
+            is_broadcaster = False
+
+        if is_broadcaster:
+            vendor_products = request.env['product.template'].sudo().search([
+                ('vendor_id', '=', live.vendor_id.id),
+            ], order='name asc, id desc')
 
         last_reaction = request.env['marketplace.live.reaction'].sudo().search(
             [('live_id', '=', live_id)], order='id desc', limit=1
@@ -100,6 +117,8 @@ class MarketplaceLiveController(http.Controller):
             'live': live,
             'comments': comments,
             'featured': featured,
+            'featured_products': featured_products,
+            'vendor_products': vendor_products,
             'last_reaction_id': last_reaction.id if last_reaction else 0,
             'last_order_id': last_live_order.id if last_live_order else 0,
         })
@@ -220,32 +239,77 @@ class MarketplaceLiveController(http.Controller):
 
     @http.route('/my/vendor/live/<int:live_id>/feature/<int:product_id>',
                 type='http', auth='user', website=True, methods=['POST'], csrf=False)
-    def vendor_live_feature(self, live_id, product_id, special_price=0, **kw):
+    def vendor_live_feature(self, live_id, product_id, special_price=0, featured='1', **kw):
         partner = request.env.user.partner_id
         live = request.env['marketplace.live'].sudo().browse(live_id)
         if not live.exists() or live.vendor_id.id != partner.id:
             return request.redirect('/my/vendor/dashboard')
 
-        request.env['marketplace.live.product'].sudo().search(
-            [('live_id', '=', live_id), ('is_featured', '=', True)]
-        ).write({'is_featured': False})
+        target_is_featured = str(featured or '1').strip() not in ('0', 'false', 'False', 'no', 'off')
 
         existing = request.env['marketplace.live.product'].sudo().search(
             [('live_id', '=', live_id), ('product_id', '=', product_id)], limit=1
         )
+
         if existing:
-            existing.sudo().write({
-                'is_featured': True,
-                'special_price': float(special_price) if special_price else 0,
-            })
-        else:
+            vals = {
+                'is_featured': target_is_featured,
+            }
+            if target_is_featured:
+                vals['special_price'] = float(special_price) if special_price else 0
+            existing.sudo().write(vals)
+        elif target_is_featured:
             request.env['marketplace.live.product'].sudo().create({
                 'live_id': live_id,
                 'product_id': product_id,
                 'is_featured': True,
                 'special_price': float(special_price) if special_price else 0,
             })
+
+        ref = (request.httprequest.referrer or '').strip()
+        if ref and ('/live/%s' % live_id) in ref:
+            return request.redirect(f'/live/{live_id}')
+
         return request.redirect(f'/my/vendor/live/{live_id}/dashboard')
+
+    @http.route('/my/vendor/live/<int:live_id>/feature/json', type='json', auth='user', website=True, csrf=False)
+    def vendor_live_feature_json(self, live_id, product_id=None, special_price=0, featured=True, **kw):
+        partner = request.env.user.partner_id
+        live = request.env['marketplace.live'].sudo().browse(live_id)
+        if not live.exists() or live.vendor_id.id != partner.id:
+            return {'status': 'forbidden'}
+
+        try:
+            product_id_int = int(product_id or 0)
+        except Exception:
+            product_id_int = 0
+        if product_id_int <= 0:
+            return {'status': 'error', 'code': 'missing_product'}
+
+        product = request.env['product.template'].sudo().browse(product_id_int)
+        if not product.exists() or not product.vendor_id or product.vendor_id.id != partner.id:
+            return {'status': 'error', 'code': 'product_not_allowed'}
+
+        target_is_featured = bool(featured)
+        existing = request.env['marketplace.live.product'].sudo().search([
+            ('live_id', '=', live_id),
+            ('product_id', '=', product_id_int),
+        ], order='id desc', limit=1)
+
+        if existing:
+            vals = {'is_featured': target_is_featured}
+            if target_is_featured:
+                vals['special_price'] = float(special_price) if special_price else 0
+            existing.sudo().write(vals)
+        elif target_is_featured:
+            request.env['marketplace.live.product'].sudo().create({
+                'live_id': live_id,
+                'product_id': product_id_int,
+                'is_featured': True,
+                'special_price': float(special_price) if special_price else 0,
+            })
+
+        return {'status': 'ok'}
 
     @http.route('/live/<int:live_id>/comment', type='http', auth='user',
                 website=True, methods=['POST'])
@@ -311,23 +375,32 @@ class MarketplaceLiveController(http.Controller):
         if not live.exists():
             return {'featured': False}
 
-        featured = request.env['marketplace.live.product'].sudo().search([
+        featured_products = request.env['marketplace.live.product'].sudo().search([
             ('live_id', '=', live_id),
             ('is_featured', '=', True),
-        ], order='sequence asc, id desc', limit=1)
+        ], order='sequence asc, id desc')
 
-        if not featured:
+        if not featured_products:
             return {'featured': False}
 
-        product = featured.product_id
-        return {
-            'featured': True,
-            'product': {
+        products_payload = []
+        for fp in featured_products:
+            product = fp.product_id
+            if not product:
+                continue
+            products_payload.append({
                 'id': product.id,
                 'name': product.name,
                 'list_price': product.list_price,
-                'special_price': featured.special_price or 0,
-            },
+                'special_price': fp.special_price or 0,
+            })
+
+        first = products_payload[0] if products_payload else None
+        return {
+            'featured': True,
+            'products': products_payload,
+            # Backward compatible payload (first featured product)
+            'product': first or {},
         }
 
     @http.route('/live/<int:live_id>/buy', type='json', auth='user', website=True, csrf=False)
