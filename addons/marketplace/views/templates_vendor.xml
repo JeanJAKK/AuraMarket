@@ -152,10 +152,18 @@
                                 <div class="card h-100 shadow-sm overflow-hidden">
                                     <!-- Image du produit -->
                                     <t t-if="product.image_1920">
-                                        <img t-attf-src="/web/image/product.template/#{product.id}/image_1920/200x200"
-                                            t-att-alt="product.name" 
-                                            class="card-img-top" 
-                                            style="height: 250px; object-fit: cover;"/>
+                                        <a t-attf-href="/web/image/product.template/#{product.id}/image_1920"
+                                           class="d-block"
+                                           data-bs-toggle="modal"
+                                           data-bs-target="#mpImageModal"
+                                           t-attf-data-mp-full="/web/image/product.template/#{product.id}/image_1920"
+                                           t-att-data-mp-alt="product.name"
+                                           style="cursor: zoom-in;">
+                                            <img t-attf-src="/web/image/product.template/#{product.id}/image_1920/200x200"
+                                                t-att-alt="product.name" 
+                                                class="card-img-top" 
+                                                style="height: 250px; object-fit: cover;"/>
+                                        </a>
                                     </t>
                                     <t t-else="">
                                         <div class="card-img-top bg-light d-flex align-items-center justify-content-center" 
@@ -260,6 +268,23 @@
                 </div>
             </div>
 
+            <!-- Image produit en grand (centrée + effet flottant) -->
+            <div class="modal fade" id="mpImageModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-xl">
+                    <div class="modal-content bg-transparent border-0 position-relative">
+                        <button type="button"
+                                class="btn-close btn-close-white position-absolute top-0 end-0 m-3"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"></button>
+                        <img id="mpImageModalImg"
+                             class="img-fluid rounded shadow-lg d-block mx-auto"
+                             style="max-height: 85vh; object-fit: contain;"
+                             src=""
+                             alt=""/>
+                    </div>
+                </div>
+            </div>
+
             <!-- JS pour toggle commentaires -->
             <script>
                 function toggleComments(id) {
@@ -268,6 +293,28 @@
                         section.classList.toggle('open');
                     }
                 }
+
+                document.addEventListener('DOMContentLoaded', function () {
+                    var modalEl = document.getElementById('mpImageModal');
+                    var imgEl = document.getElementById('mpImageModalImg');
+                    if (!modalEl || !imgEl) return;
+
+                    modalEl.addEventListener('show.bs.modal', function (event) {
+                        var trigger = event.relatedTarget;
+                        if (!trigger) return;
+
+                        var src = trigger.getAttribute('data-mp-full') || trigger.getAttribute('href') || '';
+                        var alt = trigger.getAttribute('data-mp-alt') || '';
+
+                        imgEl.src = src;
+                        imgEl.alt = alt;
+                    });
+
+                    modalEl.addEventListener('hidden.bs.modal', function () {
+                        imgEl.src = '';
+                        imgEl.alt = '';
+                    });
+                });
             </script>
         </t>
     </template>
