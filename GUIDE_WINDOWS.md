@@ -38,8 +38,6 @@ Si vous avez déjà cloné sans submodule :
 git submodule update --init --recursive --depth=1
 ```
 
-> Note : un clonage “shallow” (`--depth=1`) limite l’historique Git (plus rapide / plus léger). Si vous devez travailler avec l’historique complet d’Odoo, clonez sans `--depth`.
-
 ---
 
 ## 2) Créer un environnement virtuel (avec la bonne version Python)
@@ -100,6 +98,7 @@ pip install -r odoo\requirements.txt
 Si `pip` tente de compiler des dépendances (rare avec Python 3.11), installez **Microsoft C++ Build Tools** ou basculez sur **WSL**.
 
 ---
+
 ```powershell
 python -m pip uninstall setuptools -y
 python -m pip install "setuptools<81"
@@ -124,6 +123,58 @@ CREATE DATABASE marketplace_db OWNER odoo;
 ```
 
 > Remplacez `CHANGER_MOI` par un mot de passe.
+
+---
+
+### 4.2 (Option) Partager / restaurer une base existante (dump ZIP Odoo)
+
+Si vous voulez que tout le monde ait **exactement les mêmes données** (produits, commandes, images…), le plus simple est de partager un **dump Odoo au format ZIP** (SQL + filestore).
+
+> Recommandation : **ne commitez pas** le dump dans Git (taille + données potentiellement sensibles). Publiez-le plutôt via un lien (GitHub Release, Drive, etc.).
+
+#### Côté “auteur” du dump (celui qui a la base)
+
+Avec le venv activé, depuis la racine du repo :
+
+```powershell
+python odoo\odoo-bin db --addons-path odoo/addons,odoo/odoo/addons,addons --db_user=odoo --db_password=CHANGER_MOI dump marketplace_db .\marketplace_db.zip
+```
+
+Optionnel (recommandé) : créer un dump **neutralisé** (emails/URLs/identifiants “sensibles”) en passant par une copie :
+
+```powershell
+python odoo\odoo-bin db --addons-path odoo/addons,odoo/odoo/addons,addons --db_user=odoo --db_password=CHANGER_MOI duplicate --force --neutralize marketplace_db marketplace_db_share
+python odoo\odoo-bin db --addons-path odoo/addons,odoo/odoo/addons,addons --db_user=odoo --db_password=CHANGER_MOI dump marketplace_db_share .\marketplace_db_share.zip
+python odoo\odoo-bin db --addons-path odoo/addons,odoo/odoo/addons,addons --db_user=odoo --db_password=CHANGER_MOI drop marketplace_db_share
+```
+
+#### Côté “cloneur” (restaurer la base)
+
+Le repo fournit un script PowerShell : `scripts\windows\restore_db.ps1`.
+
+Depuis la racine du repo (venv activé), restaurez depuis un **lien** :
+
+```powershell
+.\scripts\windows\restore_db.ps1 -DumpUrl "https://.../marketplace_db.zip" -Database marketplace_db -DbUser odoo -DbPassword CHANGER_MOI -Force -Neutralize
+```
+
+Ou depuis un **fichier local** :
+
+```powershell
+.\scripts\windows\restore_db.ps1 -DumpFile "C:\\chemin\\marketplace_db.zip" -Database marketplace_db -DbUser odoo -DbPassword CHANGER_MOI -Force -Neutralize
+```
+
+Si PostgreSQL n’est pas dans votre `PATH`, ajoutez `-PgPath` (exemple) :
+
+```powershell
+.\scripts\windows\restore_db.ps1 -DumpUrl "https://.../marketplace_db.zip" -Database marketplace_db -DbUser odoo -DbPassword CHANGER_MOI -Force -Neutralize -PgPath "C:\\Program Files\\PostgreSQL\\16\\bin"
+```
+
+Après restauration, pensez à **mettre à jour** le module custom sur la base (si du code a changé depuis le dump) :
+
+```powershell
+python odoo\odoo-bin -d marketplace_db --addons-path=odoo/addons,odoo/odoo/addons,addons -u marketplace --stop-after-init --db_user=odoo --db_password=CHANGER_MOI
+```
 
 ---
 
