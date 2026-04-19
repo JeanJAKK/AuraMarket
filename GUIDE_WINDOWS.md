@@ -100,6 +100,10 @@ pip install -r odoo\requirements.txt
 Si `pip` tente de compiler des dépendances (rare avec Python 3.11), installez **Microsoft C++ Build Tools** ou basculez sur **WSL**.
 
 ---
+```powershell
+python -m pip uninstall setuptools -y
+python -m pip install "setuptools<81"
+```
 
 ## 4) Configurer PostgreSQL (création user + base)
 
