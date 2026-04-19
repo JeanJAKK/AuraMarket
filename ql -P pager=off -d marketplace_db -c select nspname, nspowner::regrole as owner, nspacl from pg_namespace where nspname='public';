@@ -1,0 +1,5 @@
+ nspname |       owner       |                                         nspacl                                          
+---------+-------------------+-----------------------------------------------------------------------------------------
+ public  | pg_database_owner | {pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,odoo=UC/pg_database_owner}
+(1 row)
+
